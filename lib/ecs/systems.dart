@@ -64,8 +64,8 @@ class PersistNoteSystem extends TriggeredSystem {
       noteEntity = null;
     } finally {
       //Clear the flagged entity and restore list mode.
-      noteEntity?.remove<IsNewNoteComponent>();
-      noteEntity?.remove<ShowSingleNoteComponent>();
+      entityManager.setUnique(ViewModeComponent(ViewMode.showNotes));
+      entityManager.removeUnique<DisplayAsSingleComponent>();
     }
   }
 
@@ -93,8 +93,8 @@ class UpdateNoteSystem extends TriggeredSystem {
       print(e);
     } finally {
       //Clear the flagged entity and restore list mode.
-      noteEntity.remove<IsEditingComponent>();
-      noteEntity.remove<ShowSingleNoteComponent>();
+      entityManager.setUnique(ViewModeComponent(ViewMode.showNotes));
+      entityManager.removeUnique<DisplayAsSingleComponent>();
     }
   }
 

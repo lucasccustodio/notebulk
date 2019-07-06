@@ -10,12 +10,6 @@ class DatabaseComponent extends UniqueComponent {
   DatabaseComponent(this.db);
 }
 
-class RandomGeneratorComponent extends UniqueComponent {
-  final Random random;
-
-  RandomGeneratorComponent(this.random);
-}
-
 class DatabaseKeyComponent extends Component {
   final int dbKey;
 
@@ -48,13 +42,20 @@ class ErrorComponent extends UniqueComponent {
   ErrorComponent(this.error);
 }
 
-class ShowSingleNoteComponent extends UniqueComponent {}
+enum ViewMode {
+  showNotes, createNote, editNote, filterNotes
+}
+
+class ViewModeComponent extends UniqueComponent {
+  final ViewMode viewMode;
+
+  ViewModeComponent([this.viewMode = ViewMode.showNotes]);
+}
+
+//TODO: Find a better name
+class DisplayAsSingleComponent extends UniqueComponent {}
 
 class IsSelectedComponent extends UniqueComponent {}
-
-class IsEditingComponent extends UniqueComponent {}
-
-class IsNewNoteComponent extends UniqueComponent {}
 
 class PersistNoteComponent extends UniqueComponent {}
 

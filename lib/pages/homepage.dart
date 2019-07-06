@@ -20,138 +20,141 @@ class HomePage extends StatelessWidget {
         bottom: true,
         maintainBottomViewPadding: false,
         child: EntityObservingWidget(
-          provider: (em) => em.getUniqueEntity<ErrorComponent>(),
-          builder: (errorEntity, context) => Stack(
-            children: <Widget>[
-              Container(
-                  decoration: BoxDecoration(
-                      gradient: LinearGradient(
-                          begin: Alignment.topCenter,
-                          end: Alignment.bottomCenter,
-                          stops: [
-                        0.2,
-                        0.6,
-                        1.0
-                      ],
-                          colors: [
-                        Colors.black,
-                        Colors.purple,
-                        Colors.purple
-                      ])),
-                  child: CustomScrollView(
-                    controller: _controller,
-                    slivers: <Widget>[
-                      SliverAppBar(
-                        floating: true,
-                        pinned: true,
-                        shape: const RoundedRectangleBorder(
-                            borderRadius: const BorderRadius.only(
-                                bottomLeft: const Radius.circular(45),
-                                bottomRight: const Radius.circular(45))),
-                        backgroundColor: Colors.black,
-                        title: Padding(
-                          padding: const EdgeInsets.only(left: 16),
-                          child: Text(
-                            "NOTEBULK",
-                            style: Theme.of(context)
-                                .textTheme
-                                .headline
-                                .copyWith(
-                                    color: Colors.white,
-                                    fontWeight: FontWeight.w400),
-                          ),
+          provider: (em) => em.getUniqueEntity<ViewModeComponent>(),
+          builder: (viewModeEntity, context) {
+            var viewMode = viewModeEntity.get<ViewModeComponent>().viewMode;
+
+            return DecoratedBox(
+                decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                        begin: Alignment.topCenter,
+                        end: Alignment.bottomCenter,
+                        stops: [0.2, 0.6, 1.0],
+                        colors: [Colors.black, Colors.purple, Colors.purple])),
+                child: CustomScrollView(
+                  controller: _controller,
+                  slivers: <Widget>[
+                    SliverAppBar(
+                      floating: true,
+                      pinned: true,
+                      shape: const RoundedRectangleBorder(
+                          borderRadius: const BorderRadius.only(
+                              bottomLeft: const Radius.circular(45),
+                              bottomRight: const Radius.circular(45))),
+                      backgroundColor: Colors.black,
+                      title: Padding(
+                        padding: const EdgeInsets.only(left: 16),
+                        child: Text(
+                          viewMode == ViewMode.showNotes
+                              ? "Suas notas"
+                              : (viewMode == ViewMode.createNote
+                                  ? "Criando nota"
+                                  : (viewMode == ViewMode.editNote
+                                      ? "Editando nota"
+                                      : "Pesquisando notas")),
+                          style: Theme.of(context).textTheme.headline.copyWith(
+                              color: Colors.white, fontWeight: FontWeight.w400),
                         ),
-                        actions: <Widget>[
-                          Padding(
-                            padding: const EdgeInsets.only(right: 32),
-                            child: Row(
-                              children: <Widget>[
-                                IconButton(
-                                  padding: EdgeInsets.all(0),
-                                  icon: Icon(
-                                    Icons.add,
-                                  ),
-                                  onPressed: () {
-                                    var alreadyCreatingNote =
-                                        em.getUniqueEntity<
-                                                IsNewNoteComponent>() !=
-                                            null;
-
-                                    //TODO: Maybe consider disabling the app bar buttons or make context-aware altogether, instead.
-                                    if (alreadyCreatingNote) return;
-
-                                    em.removeUnique<IsSelectedComponent>();
-
-                                    var newNoteEntity = em.createEntity()
-                                      ..set(ContentsComponent(''))
-                                      ..set(TimestampComponent(
-                                          DateTime.now().toIso8601String()));
-
-                                    em.setUniqueOnEntity(
-                                        IsNewNoteComponent(), newNoteEntity);
-
-                                    em.setUniqueOnEntity(
-                                        ShowSingleNoteComponent(),
-                                        newNoteEntity);
-                                  },
-                                ),
-                                IconButton(
-                                  padding: EdgeInsets.all(0),
-                                  icon: Icon(Icons.search),
-                                  onPressed: () {},
-                                )
-                              ],
-                            ),
-                          ),
-                        ],
                       ),
-                      GroupObservingWidget(
-                          matcher: NoteMatcher(),
-                          builder: (group, context) {
-                            var noteList = group.entities;
+                      actions: viewMode == ViewMode.showNotes
+                          ? <Widget>[
+                              Padding(
+                                padding: const EdgeInsets.only(right: 32),
+                                child: Row(
+                                  children: <Widget>[
+                                    IconButton(
+                                      padding: EdgeInsets.all(0),
+                                      icon: Icon(
+                                        Icons.add,
+                                      ),
+                                      onPressed: () {
+                                        em.removeUnique<IsSelectedComponent>();
 
-                            return EntityObservingWidget(
-                                provider: (em) => em
-                                    .getUniqueEntity<ShowSingleNoteComponent>(),
-                                builder: (noteEntity, context) {
-                                  var isInSingleNoteMode = noteEntity != null;
+                                        //TODO: Decouple single display mode from the group observing widget so that it's not needed to have initialize these components.
+                                        var newNoteEntity = em.createEntity()
+                                          ..set(ContentsComponent(''))
+                                          ..set(TimestampComponent(
+                                              DateTime.now()
+                                                  .toIso8601String()));
 
-                                  return SliverPadding(
-                                    padding: const EdgeInsets.only(
-                                        left: 16, right: 16, top: 4, bottom: 8),
-                                    sliver: isInSingleNoteMode
-                                        ? buildSingleNoteMode(noteEntity)
-                                        : noteList.isEmpty
-                                            ? buildEmptyNote(context)
-                                            : buildNoteListView(noteList, em),
-                                  );
-                                });
-                          }),
-                    ],
-                  )),
-            ],
-          ),
+                                        em.setUniqueOnEntity(
+                                            DisplayAsSingleComponent(),
+                                            newNoteEntity);
+
+                                        em.setUnique(ViewModeComponent(
+                                            ViewMode.createNote));
+                                      },
+                                    ),
+                                    IconButton(
+                                      padding: EdgeInsets.all(0),
+                                      icon: Icon(Icons.search),
+                                      onPressed: () {
+                                        em.setUnique(ViewModeComponent(
+                                            ViewMode.filterNotes));
+                                      },
+                                    )
+                                  ],
+                                ),
+                              ),
+                            ]
+                          : null,
+                    ),
+                    SliverPadding(
+                      padding: const EdgeInsets.only(
+                          left: 16, right: 16, top: 4, bottom: 4),
+                      sliver: viewMode == ViewMode.showNotes
+                          ? GroupObservingWidget(
+                              matcher: NoteMatcher(),
+                              builder: (group, context) {
+                                var notesList = group.entities;
+
+                                return notesList.isEmpty
+                                    ? buildEmptyNote(context)
+                                    : buildNoteListView(notesList, em);
+                              })
+                          : (isSingleDisplayMode(viewMode)
+                              ? buildSingleDisplayNote(
+                                  isNewNote: viewMode == ViewMode.createNote)
+                              : buildSearchMode()),
+                    ),
+                  ],
+                ));
+          },
         ),
       ),
     );
   }
 
-  SliverToBoxAdapter buildSingleNoteMode(Entity showSingleNote) {
-    bool isNew = showSingleNote.hasT<IsNewNoteComponent>();
+  bool isSingleDisplayMode(ViewMode viewMode) =>
+      viewMode == ViewMode.createNote || viewMode == ViewMode.editNote;
 
-    return SliverToBoxAdapter(
-        child: isNew
-            ? NewCardWidget(noteEntity: showSingleNote)
-            : EditingCardWidget(noteEntity: showSingleNote));
-  }
+  Widget buildSearchMode() => SliverToBoxAdapter(
+        child: NoResultsCardWidget(),
+      );
 
-  SliverToBoxAdapter buildEmptyNote(BuildContext context) {
+  Widget buildSingleDisplayNote({bool isNewNote = true}) {
     return SliverToBoxAdapter(
-      child: Center(child: emptyNote(context)),
+      child: EntityObservingWidget(
+          provider: (em) => em.getUniqueEntity<DisplayAsSingleComponent>(),
+          builder: (noteEntity, context) {
+            return isNewNote
+                ? NewCardWidget(
+                    noteEntity: noteEntity,
+                  )
+                : EditCardWidget(
+                    noteEntity: noteEntity,
+                  );
+          }),
     );
   }
 
-  SliverList buildNoteListView(List<Entity> notes, EntityManager em) {
+  Widget buildEmptyNote(BuildContext context) {
+    return SliverToBoxAdapter(
+      child: Center(child: EmptyNoteCardWidget()),
+    );
+  }
+
+  Widget buildNoteListView(List<Entity> notes, EntityManager em) {
     return SliverList(
       delegate: SliverChildBuilderDelegate((context, index) {
         var noteEntity = notes[index];
@@ -160,13 +163,7 @@ class HomePage extends StatelessWidget {
           padding: const EdgeInsets.only(top: 8.0, bottom: 8.0),
           child: InkWell(
             splashColor: Colors.blue,
-            onTap: () {
-              var currentSelected = em.getUniqueEntity<IsSelectedComponent>();
-              em.removeUnique<IsSelectedComponent>();
-
-              if (currentSelected != noteEntity)
-                em.setUniqueOnEntity(IsSelectedComponent(), noteEntity);
-            },
+            onTap: () => selectNoteAndScrollTo(context, noteEntity, index),
             child: NoteCardWidget(noteEntity: noteEntity),
           ),
         );
@@ -189,70 +186,150 @@ class HomePage extends StatelessWidget {
   }
 }
 
-Widget emptyNote(BuildContext context) {
-  var cardColor = Colors.white;
-  var textColor = Colors.black;
+class NoResultsCardWidget extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    var cardColor = Colors.white;
+    var textColor = Colors.black;
 
-  var contents =
-      "Você não possui nenhuma nota no momento mas sempre pode criar uma quando bater a inspiração ;)";
-  var tags = "Se inspire!";
+    var contents =
+        "Sua pesquisa não retornou nenhum resultado. Dá uma conferida se não digitou alguma tag errado.";
+    var tags = "Tente novamente!";
 
-  return Card(
-    color: cardColor,
-    clipBehavior: Clip.antiAlias,
-    elevation: 8,
-    margin: const EdgeInsets.all(0),
-    child: Column(
-      mainAxisAlignment: MainAxisAlignment.start,
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: <Widget>[
-        Padding(
-          padding:
-              const EdgeInsets.only(top: 16, bottom: 4, left: 16, right: 16),
-          child: Text(
-            formatTimestamp(DateTime.now()),
-            style: Theme.of(context).textTheme.title.copyWith(color: textColor),
-          ),
-        ),
-        Padding(
-          padding:
-              const EdgeInsets.only(top: 16, bottom: 4, left: 16, right: 16),
-          child: Text(
-            contents,
-            style: Theme.of(context).textTheme.body1.copyWith(color: textColor),
-            textAlign: TextAlign.left,
-            maxLines: null,
-            textWidthBasis: TextWidthBasis.longestLine,
-          ),
-        ),
-        Padding(
-          padding:
-              const EdgeInsets.only(left: 16, right: 16, top: 8, bottom: 8),
-          child: Container(
-            width: double.maxFinite,
-            height: 1,
-            decoration: BoxDecoration(
-                gradient: LinearGradient(
-                    begin: Alignment.centerLeft,
-                    end: Alignment.centerRight,
-                    colors: [Colors.purple, Colors.purpleAccent])),
-          ),
-        ),
-        if (tags != null)
+    return Card(
+      color: cardColor,
+      clipBehavior: Clip.antiAlias,
+      elevation: 8,
+      margin: const EdgeInsets.all(0),
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.start,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
           Padding(
             padding:
-                const EdgeInsets.only(top: 8, bottom: 16, left: 16, right: 16),
+                const EdgeInsets.only(top: 16, bottom: 4, left: 16, right: 16),
             child: Text(
-              tags,
+              formatTimestamp(DateTime.now()),
               style:
-                  Theme.of(context).textTheme.body2.copyWith(color: textColor),
-              textAlign: TextAlign.justify,
+                  Theme.of(context).textTheme.title.copyWith(color: textColor),
+            ),
+          ),
+          Padding(
+            padding:
+                const EdgeInsets.only(top: 16, bottom: 4, left: 16, right: 16),
+            child: Text(
+              contents,
+              style:
+                  Theme.of(context).textTheme.body1.copyWith(color: textColor),
+              textAlign: TextAlign.left,
+              maxLines: null,
               textWidthBasis: TextWidthBasis.longestLine,
             ),
           ),
-      ],
-    ),
-  );
+          Padding(
+            padding:
+                const EdgeInsets.only(left: 16, right: 16, top: 8, bottom: 8),
+            child: Container(
+              width: double.maxFinite,
+              height: 1,
+              decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                      begin: Alignment.centerLeft,
+                      end: Alignment.centerRight,
+                      colors: [Colors.purple, Colors.purpleAccent])),
+            ),
+          ),
+          if (tags != null)
+            Padding(
+              padding: const EdgeInsets.only(
+                  top: 8, bottom: 16, left: 16, right: 16),
+              child: Text(
+                tags,
+                style: Theme.of(context)
+                    .textTheme
+                    .body2
+                    .copyWith(color: textColor),
+                textAlign: TextAlign.justify,
+                textWidthBasis: TextWidthBasis.longestLine,
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+class EmptyNoteCardWidget extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    var cardColor = Colors.white;
+    var textColor = Colors.black;
+
+    var contents =
+        "Você não possui nenhuma nota no momento mas sempre pode criar uma quando bater a inspiração ;)";
+    var tags = "Se inspire!";
+
+    return Card(
+      color: cardColor,
+      clipBehavior: Clip.antiAlias,
+      elevation: 8,
+      margin: const EdgeInsets.all(0),
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.start,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          Padding(
+            padding:
+                const EdgeInsets.only(top: 16, bottom: 4, left: 16, right: 16),
+            child: Text(
+              formatTimestamp(DateTime.now()),
+              style:
+                  Theme.of(context).textTheme.title.copyWith(color: textColor),
+            ),
+          ),
+          Padding(
+            padding:
+                const EdgeInsets.only(top: 16, bottom: 4, left: 16, right: 16),
+            child: Text(
+              contents,
+              style:
+                  Theme.of(context).textTheme.body1.copyWith(color: textColor),
+              textAlign: TextAlign.left,
+              maxLines: null,
+              textWidthBasis: TextWidthBasis.longestLine,
+            ),
+          ),
+          Padding(
+            padding:
+                const EdgeInsets.only(left: 16, right: 16, top: 8, bottom: 8),
+            child: Container(
+              width: double.maxFinite,
+              height: 1,
+              decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                      begin: Alignment.centerLeft,
+                      end: Alignment.centerRight,
+                      colors: [Colors.purple, Colors.purpleAccent])),
+            ),
+          ),
+          if (tags != null)
+            Padding(
+              padding: const EdgeInsets.only(
+                  top: 8, bottom: 16, left: 16, right: 16),
+              child: Text(
+                tags,
+                style: Theme.of(context)
+                    .textTheme
+                    .body2
+                    .copyWith(color: textColor),
+                textAlign: TextAlign.justify,
+                textWidthBasis: TextWidthBasis.longestLine,
+              ),
+            ),
+        ],
+      ),
+    );
+  }
 }
 
 class NoteCardWidget extends StatelessWidget {
@@ -351,10 +428,9 @@ class NoteCardWidget extends StatelessWidget {
                         var em =
                             EntityManagerProvider.of(context).entityManager;
 
-                        em.setUniqueOnEntity(IsEditingComponent(), noteEntity);
                         em.setUniqueOnEntity(
-                            ShowSingleNoteComponent(), noteEntity);
-                        noteEntity.set(ContentsComponent(contents));
+                            DisplayAsSingleComponent(), noteEntity);
+                        em.setUnique(ViewModeComponent(ViewMode.editNote));
                       },
                     ),
                     FlatButton.icon(
@@ -378,16 +454,16 @@ class NoteCardWidget extends StatelessWidget {
   }
 }
 
-class EditingCardWidget extends StatefulWidget {
+class EditCardWidget extends StatefulWidget {
   final Entity noteEntity;
 
-  const EditingCardWidget({Key key, this.noteEntity}) : super(key: key);
+  const EditCardWidget({Key key, this.noteEntity}) : super(key: key);
 
   @override
   _EditingWidgetState createState() => _EditingWidgetState();
 }
 
-class _EditingWidgetState extends State<EditingCardWidget> {
+class _EditingWidgetState extends State<EditCardWidget> {
   TextEditingController contentsController;
   TextEditingController tagsController;
 
@@ -504,8 +580,8 @@ class _EditingWidgetState extends State<EditingCardWidget> {
                     onPressed: () {
                       var em = EntityManagerProvider.of(context).entityManager;
 
-                      em.removeUnique<IsEditingComponent>();
-                      em.removeUnique<ShowSingleNoteComponent>();
+                      em.removeUnique<DisplayAsSingleComponent>();
+                      em.setUnique(ViewModeComponent(ViewMode.showNotes));
                     },
                   )
                 ],
@@ -641,7 +717,11 @@ class _NewCardWidgetState extends State<NewCardWidget> {
                     label: Text("Descartar"),
                     textColor: textColor,
                     onPressed: () {
+                      var em = EntityManagerProvider.of(context).entityManager;
+
                       noteEntity.destroy();
+                      em.removeUnique<DisplayAsSingleComponent>();
+                      em.setUnique(ViewModeComponent(ViewMode.showNotes));
                     },
                   )
                 ],

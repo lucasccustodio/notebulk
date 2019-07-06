@@ -1,5 +1,3 @@
-import 'dart:math';
-
 import 'package:flutter/material.dart';
 import 'package:entitas_ff/entitas_ff.dart';
 import 'package:notebulk/pages/homepage.dart';
@@ -13,14 +11,23 @@ void main() async {
 
   var docPath = (await getExternalStorageDirectory()).path;
   var db = await databaseFactoryIo.openDatabase('$docPath/notes.db');
+
   mainEntityManager.setUnique(DatabaseComponent(db));
-  mainEntityManager.setUnique(RandomGeneratorComponent(Random()));
-  mainEntityManager.setUnique(ErrorComponent(null));
+  mainEntityManager.setUnique(ViewModeComponent(ViewMode.showNotes));
 
   runApp(EntityManagerProvider(
     entityManager: mainEntityManager,
-    child: MyApp(),
-    //Define all application systems in use here. 
+    child: MaterialApp(
+        title: 'Notebulk',
+        theme: ThemeData(
+            primarySwatch: Colors.blue,
+            typography: Typography(
+              englishLike: Typography.englishLike2018,
+              dense: Typography.dense2018,
+              tall: Typography.tall2018,
+            )),
+        home: MyApp()),
+    //Define all application systems in use here.
     systems: RootSystem(mainEntityManager, [
       LoadNotesSystem(),
       PersistNoteSystem(),
@@ -30,18 +37,45 @@ void main() async {
   ));
 }
 
-class MyApp extends StatelessWidget {
+class MyApp extends StatefulWidget {
+  @override
+  _MyAppState createState() => _MyAppState();
+}
+
+class _MyAppState extends State<MyApp> {
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
-        title: 'Notebulk',
-        theme: ThemeData(
-            primarySwatch: Colors.blue,
-            typography: Typography(
-              englishLike: Typography.englishLike2018,
-              dense: Typography.dense2018,
-              tall: Typography.tall2018,
-            )),
-        home: HomePage());
+    return WillPopScope(
+      child: HomePage(),
+      onWillPop: () async {
+        var em = EntityManagerProvider.of(context).entityManager;
+        var viewModeEntity = em.getUniqueEntity<ViewModeComponent>();
+        var viewMode = viewModeEntity.get<ViewModeComponent>().viewMode;
+
+        if (viewMode != ViewMode.showNotes) {
+          if (viewMode == ViewMode.createNote)
+            em.getUniqueEntity<DisplayAsSingleComponent>().destroy();
+
+          em.setUnique(ViewModeComponent(ViewMode.showNotes));
+          return true;
+        }
+
+        return showDialog(
+            context: context,
+            builder: (context) => AlertDialog(
+                  title: Text('Deseja sair?'),
+                  actions: <Widget>[
+                    FlatButton(
+                      child: Text("Não"),
+                      onPressed: () => Navigator.of(context).pop(false),
+                    ),
+                    FlatButton(
+                      child: Text("Sim"),
+                      onPressed: () => Navigator.of(context).pop(true),
+                    ),
+                  ],
+                ));
+      },
+    );
   }
 }
