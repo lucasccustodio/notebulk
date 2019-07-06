@@ -17,7 +17,7 @@ void main() async {
     testEntityManager.setUnique(TestComponent(0));
 
     await widgetTester.pumpWidget(
-      //InheritedWidget that will provide our EntityManger to the subtree
+      //InheritedWidget that will provide our EntityManager to the subtree
       EntityManagerProvider(
         entityManager: testEntityManager,
         child: TestApp(),
@@ -44,7 +44,6 @@ class TestApp extends StatelessWidget {
     return MaterialApp(
       title: 'Testing',
       theme: ThemeData(
-        //Placeholder theme for now
         primarySwatch: Colors.blue,
       ),
       home: Scaffold(
@@ -67,10 +66,10 @@ class TestApp extends StatelessWidget {
           onPressed: () {
             //Retrieve the underlying EntityManager
             var entityManager = EntityManagerProvider.of(context).entityManager;
-            //Retrived the UniqueComponent, not it's owner Entity, and the current count value
-            var count = entityManager.getUnique<TestComponent>().counter;
-            //Update the UniqueComponent  by creating a new instance with count incremented, which will rebuild all EntityObservingWidgets currently observing for changes on this UniqueComponent
-            entityManager.setUnique(TestComponent(count + 1));
+            //Retrieve the UniqueComponent, not it's owner Entity, and the current counter value
+            var counter = entityManager.getUnique<TestComponent>().counter;
+            //Update the UniqueComponent  by creating a new instance with counter incremented, which will rebuild all EntityObservingWidgets currently observing for changes on this UniqueComponent
+            entityManager.setUnique(TestComponent(counter + 1));
           },
         ),
       ),
