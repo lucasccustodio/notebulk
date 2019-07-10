@@ -1,3 +1,11 @@
+class Routes {
+  static const String showNotes = 'showNotes'; 
+  static const String createNote = 'createNote';
+  static const String createList = 'createList';
+  static const String editNote = 'editNote';
+  static const String editList = 'editList';
+}
+
 String formatTimestamp(DateTime timestamp) {
   //TODO: Move these somewhere else so it can be localized instead.
   final dayNames = ["SEG", "TER", "QUA", "QUI", "SEX", "SAB", "DOM"];
