@@ -1,18 +1,21 @@
-import 'package:entitas_ff/entitas_ff.dart' show EntityManager;
+import 'package:entitas_ff/entitas_ff.dart' show EntityManager, Entity;
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:notebulk/ecs/components.dart';
 import 'package:notebulk/util.dart';
+import 'package:notebulk/widgets/util.dart';
 
-class CreateListPage extends StatefulWidget {
+class EditListPage extends StatefulWidget {
   final EntityManager entityManager;
-  const CreateListPage({Key key, this.entityManager}) : super(key: key);
+  final Entity noteEntity;
+  const EditListPage({Key key, this.entityManager, this.noteEntity})
+      : super(key: key);
 
   @override
-  _CreateListPageState createState() => _CreateListPageState();
+  _EditListPageState createState() => _EditListPageState();
 }
 
-class _CreateListPageState extends State<CreateListPage> {
+class _EditListPageState extends State<EditListPage> {
   TextEditingController contentsController = TextEditingController();
   TextEditingController tagsController = TextEditingController();
   TextEditingController itemController = TextEditingController();
@@ -22,14 +25,19 @@ class _CreateListPageState extends State<CreateListPage> {
 
   @override
   void initState() {
-    contentsController.text = '';
-    tagsController.text = '';
+    contentsController.text =
+        widget.noteEntity.get<ContentsComponent>().contents;
+    tagsController.text = widget.noteEntity.get<TagsComponent>()?.tags.join(",");
     items = <ListItem>[];
+    for (var i in widget.noteEntity.get<ListComponent>().items)
+      items.add(ListItem(i.label, isChecked: i.isChecked));
     super.initState();
   }
 
   @override
   Widget build(BuildContext context) {
+    var themeColor = Theme.of(context).primaryColor;
+
     return Scaffold(
       backgroundColor: Colors.transparent,
       resizeToAvoidBottomInset: true,
@@ -42,17 +50,20 @@ class _CreateListPageState extends State<CreateListPage> {
             SliverAppBar(
               floating: true,
               pinned: true,
+              elevation: 0,
               shape: const RoundedRectangleBorder(
                   borderRadius: const BorderRadius.only(
                       bottomLeft: const Radius.circular(45),
                       bottomRight: const Radius.circular(45))),
-              backgroundColor: Colors.black,
+              leading: BackButton(),
               title: Padding(
                 padding: const EdgeInsets.only(left: 16),
                 child: Text(
                   "Criar lista",
-                  style: Theme.of(context).textTheme.headline.copyWith(
-                      color: Colors.white, fontWeight: FontWeight.w400),
+                  style: Theme.of(context)
+                      .textTheme
+                      .headline
+                      .copyWith(fontWeight: FontWeight.w400),
                 ),
               ),
             ),
@@ -60,7 +71,7 @@ class _CreateListPageState extends State<CreateListPage> {
                 padding: const EdgeInsets.only(
                     left: 16, right: 16, top: 4, bottom: 4),
                 sliver: SliverToBoxAdapter(
-                  child: buildListCard(),
+                  child: buildListCard(themeColor),
                 )),
           ],
         ),
@@ -68,13 +79,12 @@ class _CreateListPageState extends State<CreateListPage> {
     );
   }
 
-  Card buildListCard() {
+  Card buildListCard(
+    Color themeColor,
+  ) {
     var timestamp = DateTime.now();
-    var cardColor = Colors.white;
-    var textColor = Colors.black;
 
     return Card(
-      color: cardColor,
       clipBehavior: Clip.antiAlias,
       elevation: 8,
       margin: const EdgeInsets.all(0),
@@ -83,8 +93,8 @@ class _CreateListPageState extends State<CreateListPage> {
           mainAxisAlignment: MainAxisAlignment.start,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: <Widget>[
-            buildTimestamp(timestamp, context, textColor),
-            buildContentsField(context, textColor),
+            buildTimestamp(timestamp),
+            buildContentsField(context),
             Padding(
               padding: const EdgeInsets.only(
                   left: 16, right: 16, top: 8, bottom: 16),
@@ -157,9 +167,7 @@ class _CreateListPageState extends State<CreateListPage> {
                                     itemNode.unfocus();
                                     currentlyEditing = null;
                                   });
-                              }
-
-                              if (itemController.text.isNotEmpty)
+                              } else if (itemController.text.isNotEmpty)
                                 setState(() {
                                   items.add(ListItem(itemController.text));
                                   itemController.clear();
@@ -174,116 +182,94 @@ class _CreateListPageState extends State<CreateListPage> {
                               focusNode: itemNode,
                               maxLines: null,
                               decoration: InputDecoration(
-                                  labelText: "Nome do item",
-                                  hintText: "Crie um novo item na lista",
-                                  border: InputBorder.none),
+                                labelText: "Nome do item",
+                                hintText: "Crie um novo item na lista",
+                              ),
                             ),
                           ),
                         ])
                   ]),
             ),
-            buildSeparator(),
-            buildTagsField(context, textColor),
-            buildBottomMenu(textColor)
+            buildTagsField(context),
+            buildBottomMenu(themeColor)
           ],
         ),
       ),
     );
   }
 
-  void createList() {
-    widget.entityManager.setUnique(PersistNoteComponent(
-        contents: contentsController.text,
-        tags: tagsController.text,
-        items: items));
+  void onUpdate() {
+    if (items.isNotEmpty)
+      widget.entityManager.setUnique(UpdateNoteComponent(
+          contents: contentsController.text,
+          tags: tagsController.text,
+          items: items,
+          dbKey: widget.noteEntity.get<DatabaseKeyComponent>().dbKey));
   }
 
-  void cancel() {
-    widget.entityManager
-        .setUnique(NavigationSystemComponent(routeOp: NavigationOps.pop));
+  void onCancel() {
+    widget.entityManager.setUnique(NavigationSystemComponent.pop());
   }
 
-  Padding buildTimestamp(
-      DateTime timestamp, BuildContext context, Color textColor) {
+  Widget buildTimestamp(DateTime timestamp) {
     return Padding(
       padding: const EdgeInsets.only(top: 16, bottom: 4, left: 16, right: 16),
       child: Text(
         formatTimestamp(timestamp),
-        style: Theme.of(context).textTheme.title.copyWith(color: textColor),
       ),
     );
   }
 
-  Padding buildContentsField(BuildContext context, Color textColor) {
+  Padding buildContentsField(
+    BuildContext context,
+  ) {
     return Padding(
       padding: const EdgeInsets.only(top: 16, bottom: 4, left: 16, right: 16),
       child: TextField(
         dragStartBehavior: DragStartBehavior.down,
         controller: contentsController,
         decoration: InputDecoration(
-            hintText: "Dê um nome pra sua lista primeiro.",
-            labelText: "Nome da lista",
-            border: InputBorder.none),
-        style: Theme.of(context).textTheme.body1.copyWith(color: textColor),
+          hintText: "Dê um nome pra sua lista primeiro.",
+          labelText: "Nome da lista",
+        ),
         textAlign: TextAlign.left,
         maxLines: null,
       ),
     );
   }
 
-  Padding buildSeparator() {
-    return Padding(
-      padding: const EdgeInsets.only(left: 16, right: 16, top: 8, bottom: 8),
-      child: Container(
-        width: double.maxFinite,
-        height: 1,
-        decoration: BoxDecoration(
-            gradient: LinearGradient(
-                begin: Alignment.centerLeft,
-                end: Alignment.centerRight,
-                colors: [Colors.purple, Colors.purpleAccent])),
-      ),
-    );
-  }
-
-  Padding buildTagsField(BuildContext context, Color textColor) {
+  Padding buildTagsField(BuildContext context) {
     return Padding(
       padding: const EdgeInsets.only(top: 8, bottom: 16, left: 16, right: 16),
       child: TextField(
         controller: tagsController,
         decoration: InputDecoration(
-            hintText: "Insira algumas tags pra ajudar nas buscas depois.",
-            labelText: "Tags",
-            border: InputBorder.none),
-        style: Theme.of(context).textTheme.body2.copyWith(color: textColor),
+          hintText: "Insira algumas tags pra ajudar nas buscas depois.",
+          labelText: "Tags",
+        ),
         textAlign: TextAlign.left,
       ),
     );
   }
 
-  Container buildBottomMenu(Color textColor) {
+  Container buildBottomMenu(Color menuColor) {
     return Container(
       width: double.maxFinite,
       alignment: Alignment.centerRight,
-      decoration: BoxDecoration(
-          gradient: LinearGradient(
-              begin: Alignment.centerLeft,
-              end: Alignment.centerRight,
-              colors: [Colors.purple, Colors.purpleAccent])),
+      margin: EdgeInsets.all(2),
+      color: menuColor,
       child: Row(
         mainAxisAlignment: MainAxisAlignment.end,
         children: <Widget>[
           FlatButton.icon(
             icon: Icon(Icons.save),
-            label: Text("Salvar"),
-            textColor: textColor,
-            onPressed: createList,
+            label: Text("Atualizar"),
+            onPressed: onUpdate,
           ),
           FlatButton.icon(
             icon: Icon(Icons.cancel),
             label: Text("Cancelar"),
-            textColor: textColor,
-            onPressed: cancel,
+            onPressed: onCancel,
           )
         ],
       ),

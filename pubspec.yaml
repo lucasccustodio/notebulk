@@ -1,5 +1,5 @@
 name: notebulk
-description: A note taking application for your random-ass thoughts
+description: A note taking application for your daily needs
 
 # The following defines the version and build number for your application.
 # A version number is three numbers separated by dots, like 1.2.43
@@ -11,7 +11,7 @@ description: A note taking application for your random-ass thoughts
 # In iOS, build-name is used as CFBundleShortVersionString while build-number used as CFBundleVersion.
 # Read more about iOS versioning at
 # https://developer.apple.com/library/archive/documentation/General/Reference/InfoPlistKeyReference/Articles/CoreFoundationKeys.html
-version: 1.0.0+1
+version: 1.1.0
 
 environment:
   sdk: ">=2.2.2 <3.0.0"
@@ -20,9 +20,12 @@ dependencies:
   flutter:
     sdk: flutter
   entitas_ff:
-    git: https://github.com/lucasccustodio/entitas_ff/
-  sembast: ^1.17.0-dev.1
+    git: https://github.com/lucasccustodio/entitas_ff.git
+  sembast: ^2.0.0+1
   path_provider: ^1.1.2
+  tinycolor: ^1.0.2
+  permission: ^0.1.2
+  image_picker: ^0.6.0+17
   
 dev_dependencies:
   flutter_test:

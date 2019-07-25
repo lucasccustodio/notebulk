@@ -1,27 +1,8 @@
+import 'dart:io';
+
 import 'package:entitas_ff/entitas_ff.dart';
 import 'package:flutter/material.dart';
 import 'package:sembast/sembast.dart';
-
-abstract class _NavigatorController {
-  final GlobalKey<NavigatorState> key;
-
-  void goto(String routeName);
-  void pop([dynamic value]);
-
-  _NavigatorController(this.key);
-}
-
-//Dependency Injection components
-class NavigatorControllerComponent extends _NavigatorController
-    implements UniqueComponent {
-  NavigatorControllerComponent(GlobalKey key) : super(key);
-
-  @override
-  void goto(String routeName) => key.currentState.pushNamed(routeName);
-
-  @override
-  void pop([dynamic value]) => key.currentState.pop(value);
-}
 
 class DatabaseComponent extends UniqueComponent {
   final Database db;
@@ -36,17 +17,19 @@ class DatabaseKeyComponent extends Component {
 }
 
 //Note Entity components
-class ShowMenuComponent extends Component {
-  final bool showMenu;
-
-  ShowMenuComponent(this.showMenu);
-}
+class ShowMenuComponent extends Component {}
 
 class TimestampComponent extends Component {
   final DateTime timestamp;
 
   TimestampComponent(String _timestamp)
       : timestamp = DateTime.parse(_timestamp);
+}
+
+class PictureComponent extends Component {
+  final File pic;
+
+  PictureComponent(String path) : pic = File(path);
 }
 
 class ContentsComponent extends Component {
@@ -56,15 +39,17 @@ class ContentsComponent extends Component {
 }
 
 class TagsComponent extends Component {
-  final String tags;
+  final List<String> tags;
 
   TagsComponent(this.tags);
 }
 
-class IsListComponent extends Component {
+class ArchivedComponent extends Component {}
+
+class ListComponent extends Component {
   final List<ListItem> items;
 
-  IsListComponent({this.items = const <ListItem>[]});
+  ListComponent({this.items = const <ListItem>[]});
 }
 
 class ListItem {
@@ -95,50 +80,109 @@ class ErrorComponent extends UniqueComponent {
   ErrorComponent(this.error);
 }
 
-enum NavigationOps { push, pop, replace }
+enum NavigationOps { push, pop, replace, showDialog }
 
 class NavigationSystemComponent extends UniqueComponent {
   final String routeName;
   final NavigationOps routeOp;
 
+  NavigationSystemComponent.pop()
+      : routeName = '',
+        routeOp = NavigationOps.pop;
+
+  NavigationSystemComponent.push(String name)
+      : routeName = name,
+        routeOp = NavigationOps.push;
+
+  NavigationSystemComponent.showDialog(String name)
+      : routeName = name,
+        routeOp = NavigationOps.showDialog;
+
+  NavigationSystemComponent.replace(String name)
+      : routeName = name,
+        routeOp = NavigationOps.replace;
+
   NavigationSystemComponent(
       {this.routeName, this.routeOp = NavigationOps.push});
 }
 
+class CurrentPageComponent extends UniqueComponent {
+  final int index;
+
+  CurrentPageComponent([this.index = 0]);
+}
+
+class StoragePermissionComponent extends UniqueComponent {
+  final bool granted;
+
+  StoragePermissionComponent([this.granted = true]);
+}
+
 class RefreshNotesComponent extends UniqueComponent {}
 
-class PersistNoteComponent extends UniqueComponent {
-  final int dbKey;
+class FeatureEntityComponent extends UniqueComponent {}
+
+class HasDataComponent extends UniqueComponent {}
+
+class PersistNoteComponent extends Component {}
+
+class UpdateNoteComponent extends Component {}
+
+class DeleteNoteComponent extends Component {}
+
+class ThemeComponent extends UniqueComponent {}
+
+class ColorComponent extends Component {
+  final Color color;
+
+  ColorComponent(this.color);
+}
+
+class AccentColorComponent extends Component {
+  final Color accentColor;
+
+  AccentColorComponent(this.accentColor);
+}
+
+class DarkModeComponent extends Component {
+  final bool darkMode;
+
+  DarkModeComponent([this.darkMode = true]);
+}
+
+class OpenMenuComponent extends UniqueComponent {
+  final bool isOpen;
+
+  OpenMenuComponent([this.isOpen = false]);
+}
+
+class MainTickComponent extends UniqueComponent {
+  final int tick;
+
+  MainTickComponent(this.tick);
+}
+
+class TickComponent extends Component {
+  final int tick;
+
+  TickComponent(this.tick);
+}
+
+class SearchBarComponent extends UniqueComponent {
+  final bool isOpen;
+
+  SearchBarComponent([this.isOpen = false]);
+}
+
+class KeyboardVisibleComponent extends UniqueComponent {
+  final bool isVisible;
+
+  KeyboardVisibleComponent(this.isVisible);
+}
+
+class FormDataComponent extends UniqueComponent {
   final String contents;
   final String tags;
-  final List<ListItem> items;
 
-  PersistNoteComponent({this.contents, this.tags, this.items = const <ListItem>[], this.dbKey});
-}
-
-class UpdateNoteComponent extends UniqueComponent {
-  final int dbKey;
-  final String contents;
-  final String tags;
-  final List<ListItem> items;
-
-  UpdateNoteComponent({this.contents, this.tags, this.items = const <ListItem>[], this.dbKey});
-}
-
-class EditingNoteComponent extends UniqueComponent {}
-
-class DeleteNoteComponent extends UniqueComponent {
-  final int dbKey;
-
-  DeleteNoteComponent(this.dbKey);
-}
-
-enum FABStatus {
-  closed, open
-}
-
-class FABStatusComponent extends UniqueComponent {
-  final FABStatus status;
-
-  FABStatusComponent({this.status = FABStatus.closed});
+  FormDataComponent({this.contents, this.tags});
 }

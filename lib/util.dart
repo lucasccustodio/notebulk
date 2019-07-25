@@ -1,9 +1,13 @@
 class Routes {
-  static const String showNotes = 'showNotes'; 
+  static const String showNotes = 'showNotes';
   static const String createNote = 'createNote';
   static const String createList = 'createList';
   static const String editNote = 'editNote';
   static const String editList = 'editList';
+  static const String takePicPage = 'takePic';
+  static const String pickPicPage = 'pickPic';
+  static const String errorPage = 'errorPage';
+  static const String testPage = 'testPage';
 }
 
 String formatTimestamp(DateTime timestamp) {

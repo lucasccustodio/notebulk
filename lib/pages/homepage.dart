@@ -4,33 +4,28 @@ import 'package:notebulk/ecs/components.dart';
 import 'package:notebulk/ecs/matchers.dart';
 import 'package:notebulk/util.dart';
 import 'package:notebulk/widgets/cards.dart';
+import 'package:notebulk/widgets/util.dart';
+import 'package:tinycolor/tinycolor.dart';
 
-class HomePage extends StatefulWidget {
+class HomePage extends StatelessWidget {
   final EntityManager entityManager;
 
   const HomePage({Key key, this.entityManager}) : super(key: key);
-  @override
-  _HomePageState createState() => _HomePageState();
-}
-
-class _HomePageState extends State<HomePage> {
-  final ScrollController _controller = ScrollController();
-
-  @override
-  void initState() {
-    widget.entityManager
-        .setUnique(FABStatusComponent(status: FABStatus.closed));
-    super.initState();
-  }
 
   @override
   Widget build(BuildContext context) {
+    var darkMode = Theme.of(context).brightness == Brightness.dark;
+    var themeColor = Theme.of(context).primaryColor;
+    var fabPos = MediaQuery.of(context).size.width / 2 - (56.0 * 4.0) / 2;
+
     return WillPopScope(
       onWillPop: () async {
         return showDialog(
             context: context,
             builder: (context) => AlertDialog(
-                  title: Text('Deseja sair?'),
+                  title: Text(
+                    'Deseja sair?',
+                  ),
                   actions: <Widget>[
                     FlatButton(
                       child: Text("Não"),
@@ -44,77 +39,277 @@ class _HomePageState extends State<HomePage> {
                 ));
       },
       child: Scaffold(
-        backgroundColor: Colors.transparent,
-        resizeToAvoidBottomInset: true,
-        body: SafeArea(
-          top: false,
-          bottom: true,
-          maintainBottomViewPadding: false,
-          child: Stack(
-            children: <Widget>[
-              CustomScrollView(
-                controller: _controller,
-                key: PageStorageKey('noteListScroll'),
-                slivers: <Widget>[
-                  SliverAppBar(
-                    floating: true,
-                    pinned: true,
-                    shape: const RoundedRectangleBorder(
-                        borderRadius: const BorderRadius.only(
-                            bottomLeft: const Radius.circular(45),
-                            bottomRight: const Radius.circular(45))),
-                    backgroundColor: Colors.black,
-                    title: Padding(
-                      padding: const EdgeInsets.only(left: 16),
-                      child: Text(
-                        "Suas notas",
-                        style: Theme.of(context).textTheme.headline.copyWith(
-                            color: Colors.white, fontWeight: FontWeight.w400),
-                      ),
+          resizeToAvoidBottomInset: false,
+          extendBody: true,
+          drawer: Drawer(
+            child: Container(
+              color: Theme.of(context).cardColor,
+              child: Column(
+                children: <Widget>[
+                  Container(
+                    child: Text(
+                      "Configurações",
                     ),
-                    actions: <Widget>[
-                      IconButton(
-                        padding: EdgeInsets.all(0),
-                        icon: Icon(Icons.search),
-                        onPressed: () {},
-                      )
+                    alignment: Alignment.center,
+                    color: themeColor,
+                    width: MediaQuery.of(context).size.width,
+                    height: MediaQuery.of(context).size.height * 0.15,
+                  ),
+                  Padding(
+                    padding: const EdgeInsets.all(8.0),
+                    child: Text("Cor do tema"),
+                  ),
+                  Wrap(
+                    children: [
+                      for (int i = 0; i < Colors.primaries.length; i++)
+                        InkWell(
+                          onTap: () =>
+                              entityManager.getUniqueEntity<ThemeComponent>()
+                                ..set(ColorComponent(Colors.primaries[i]))
+                                ..set(AccentColorComponent(
+                                    TinyColor(Colors.primaries[i])
+                                        .brighten(5)
+                                        .color)),
+                          child: Container(
+                            color: Colors.primaries[i],
+                            width: 50,
+                            height: 50,
+                          ),
+                        )
                     ],
                   ),
-                  SliverPadding(
-                      padding: const EdgeInsets.only(
-                          left: 16, right: 16, top: 4, bottom: 4),
-                      sliver: GroupObservingWidget(
-                          matcher: NoteMatcher(),
-                          builder: (group, context) {
-                            var notesList = group.entities;
-
-                            return notesList.isEmpty
-                                ? buildEmptyNote(context)
-                                : buildNoteListView(notesList);
-                          })),
+                  SwitchListTile(
+                    title: Text("Modo escuro"),
+                    value: darkMode,
+                    onChanged: (_) => entityManager
+                        .getUniqueEntity<ThemeComponent>()
+                        .update<DarkModeComponent>(
+                            (old) => DarkModeComponent(!old.darkMode)),
+                  )
                 ],
               ),
-              Positioned(
-                  right: 16,
-                  bottom: 16,
-                  child: AnimatedFab(
-                    onPressed: (index) {
-                      widget.entityManager.setUnique(NavigationSystemComponent(
-                          routeName: index == 0
-                              ? Routes.createNote
-                              : Routes.createList));
-                    },
-                  ))
-            ],
+            ),
+          ),
+          body: buildScaffoldBody(darkMode, fabPos, context)),
+    );
+  }
+
+  Stack buildScaffoldBody(bool darkMode, double fabPos, BuildContext context) {
+    return Stack(
+      children: <Widget>[
+        SafeArea(
+          bottom: false,
+          top: false,
+          //maintainBottomViewPadding: true,
+          minimum: EdgeInsets.only(bottom: kBottomNavigationBarHeight),
+          child: EntityObservingWidget(
+            provider: (em) => em.getUniqueEntity<CurrentPageComponent>(),
+            builder: (e, context) {
+              return NotesList(
+                  entityManager: entityManager,
+                  currentPage: e.get<CurrentPageComponent>().index);
+            },
           ),
         ),
-      ),
+        //if (MediaQuery.of(context).viewInsets.bottom == 0)
+        Positioned(
+            bottom: 0,
+            child: AnimatableEntityObservingWidget<Entity>(
+                duration: Duration(milliseconds: 300),
+                provider: (em) => em.getUniqueEntity<CurrentPageComponent>(),
+                startAnimating: true,
+                tweens: {
+                  'iconScale': Tween<double>(begin: 1.0, end: 1.2),
+                  'iconColor': ColorTween(
+                      begin: Colors.grey,
+                      end: darkMode ? Colors.white : Colors.black)
+                },
+                builder: (pageEntity, animations, __) {
+                  var pageIndex = pageEntity.get<CurrentPageComponent>().index;
+
+                  return BottomNavigation(
+                    index: pageIndex,
+                    scaleIcon: animations['iconScale'],
+                    colorIcon: animations['iconColor'],
+                    onTap: (index) {
+                      if (index != pageIndex)
+                        entityManager.setUnique(CurrentPageComponent(index));
+                    },
+                    items: [
+                      TabItem(icon: Icons.home, label: "Homepage"),
+                      TabItem(icon: Icons.archive, label: "Arquivo")
+                    ],
+                  );
+                })),
+        //if (MediaQuery.of(context).viewInsets.bottom == 0)
+        Positioned(
+            bottom: 30,
+            left: fabPos,
+            child: AnimatableEntityObservingWidget<EntityMap>(
+                startAnimating: false,
+                duration: Duration(milliseconds: 300),
+                provider: (em) => em.getUniquesNamed({
+                      'menuEntity': OpenMenuComponent,
+                      'pageEntity': CurrentPageComponent
+                    }),
+                tweens: {
+                  'buttonTranslation': Tween<double>(
+                    begin: 56,
+                    end: -14,
+                  ),
+                  'iconColor': ColorTween(
+                      begin: darkMode ? Colors.white : Colors.black,
+                      end: Colors.red),
+                  'iconOpacity': Tween<double>(begin: 0.0, end: 1.0)
+                },
+                animateUpdated: (oldC, newC) {
+                  if (newC is CurrentPageComponent) return null;
+
+                  return (newC is OpenMenuComponent && newC.isOpen == false)
+                      ? false
+                      : true;
+                },
+                builder: (map, animations, __) {
+                  var isOpen =
+                      map['menuEntity'].get<OpenMenuComponent>().isOpen;
+                  var page =
+                      map['pageEntity'].get<CurrentPageComponent>().index;
+
+                  return page == 0
+                      ? FABMenu(
+                          animateIcon: animations['iconOpacity'],
+                          toggleButtonColor: animations['iconColor'],
+                          translateButton: animations['buttonTranslation'],
+                          onToggle: () => entityManager
+                              .setUnique(OpenMenuComponent(!isOpen)),
+                          onPressed: (index) {
+                            var routes = [
+                              Routes.createNote,
+                              Routes.testPage,
+                              Routes.createList
+                            ];
+
+                            entityManager.setUnique(
+                                NavigationSystemComponent.push(routes[index]));
+
+                            entityManager.setUnique(OpenMenuComponent(false));
+                          },
+                        )
+                      : SizedBox();
+                })),
+        Positioned(
+          left: MediaQuery.of(context).size.width / 2 - 0.5,
+          child: IgnorePointer(
+            child: Container(
+              width: 1,
+              height: MediaQuery.of(context).size.height,
+              color: Colors.red,
+            ),
+          ),
+        ),
+        Positioned(
+          top: MediaQuery.of(context).size.height / 2 - 0.5,
+          child: IgnorePointer(
+            child: Container(
+              height: 1,
+              width: MediaQuery.of(context).size.width,
+              color: Colors.red,
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class NotesList extends StatelessWidget {
+  final EntityManager entityManager;
+  final int currentPage;
+
+  const NotesList({Key key, this.entityManager, this.currentPage = 0})
+      : super(key: key);
+
+  @override
+  Widget build(BuildContext context) {
+    return CustomScrollView(
+      physics: BouncingScrollPhysics(),
+      key: PageStorageKey(
+          currentPage == 0 ? 'noteListScroll' : 'archiveListScroll'),
+      slivers: <Widget>[
+        AnimatableEntityObservingWidget(
+          provider: (em) => em.getUniqueEntity<SearchBarComponent>(),
+          tweens: {
+            'scale': Tween<double>(
+                begin: 0, end: MediaQuery.of(context).size.width * 0.6),
+            'opacity': Tween<double>(begin: 0.0, end: 1.0)
+          },
+          startAnimating: false,
+          animateUpdated: (_, c) =>
+              (c is SearchBarComponent && c.isOpen == false) ? false : true,
+          builder: (searchMenuEntity, animations, context) {
+            var barScale = animations['scale'].value;
+            var barOpacity = animations['opacity'].value;
+
+            return SliverAppBar(
+              pinned: true,
+              floating: true,
+              snap: true,
+              title: Row(
+                mainAxisAlignment: MainAxisAlignment.end,
+                children: <Widget>[
+                  GestureDetector(
+                    child: Icon(
+                      barOpacity == 1.0 ? Icons.arrow_right : Icons.search,
+                    ),
+                    onTap: () {
+                      entityManager.updateUnique<SearchBarComponent>(
+                          (old) => SearchBarComponent(!old.isOpen));
+                    },
+                  ),
+                  Opacity(
+                    opacity: barOpacity,
+                    child: Container(
+                      margin: EdgeInsets.only(left: 8, right: 16 * barOpacity),
+                      width: barScale,
+                      height: kBottomNavigationBarHeight / 2,
+                      child: TextField(
+                        decoration: InputDecoration(
+                            filled: true,
+                            fillColor: Colors.white,
+                            border: OutlineInputBorder()),
+                      ),
+                    ),
+                  )
+                ],
+              ),
+            );
+          },
+        ),
+        SliverPadding(
+            padding:
+                const EdgeInsets.only(left: 16, right: 16, top: 4, bottom: 4),
+            sliver: GroupObservingWidget(
+                matcher: currentPage == 0 ? Matchers.note : Matchers.archived,
+                builder: (group, context) {
+                  var notesList = group.entities;
+
+                  return notesList.isEmpty
+                      ? buildEmptyNote(context)
+                      : buildNoteListView(notesList);
+                })),
+      ],
     );
   }
 
   Widget buildEmptyNote(BuildContext context) {
     return SliverToBoxAdapter(
-      child: Center(child: EmptyNoteCardWidget()),
+      child: Center(
+          child: InfoCardWidget(
+        contents: currentPage == 1
+            ? "Suas anotações arquivadas irão aparecer aqui e podem ser restauradas depois."
+            : "Você ainda não possui nenhuma anotação...",
+        themeEntity: entityManager.getUniqueEntity<ThemeComponent>(),
+      )),
     );
   }
 
@@ -126,167 +321,20 @@ class _HomePageState extends State<HomePage> {
         return Padding(
           padding: const EdgeInsets.only(top: 8.0, bottom: 8.0),
           child: InkWell(
-            splashColor: Colors.blue,
-            onTap: () => selectNoteAndScrollTo(context, noteEntity, index),
-            child: NoteCardWidget(noteEntity: noteEntity),
+            onTap: () => selectNote(noteEntity),
+            child: NoteCardWidget(
+              noteEntity: noteEntity,
+            ),
           ),
         );
       }, childCount: notes.length),
     );
   }
 
-  selectNoteAndScrollTo(BuildContext context, Entity toSelect, int index) {
-    var em = widget.entityManager;
-    var quarterOfScreen = MediaQuery.of(context).size.height * 0.25;
-    var showMenu = toSelect.get<ShowMenuComponent>().showMenu;
-
-    toSelect.set(ShowMenuComponent(!showMenu));
-
-    _controller.animateTo(quarterOfScreen * index,
-        duration: Duration(milliseconds: 300), curve: Curves.easeOut);
-  }
-}
-
-class AnimatedFab extends StatefulWidget {
-  final Function(int button) onPressed;
-  final String tooltip;
-  final IconData icon;
-
-  AnimatedFab({this.onPressed, this.tooltip, this.icon});
-
-  @override
-  _AnimatedFabState createState() => _AnimatedFabState();
-}
-
-class _AnimatedFabState extends State<AnimatedFab>
-    with SingleTickerProviderStateMixin {
-  bool isOpened = false;
-  AnimationController _animationController;
-  Animation<Color> _buttonColor;
-  Animation<double> _animateIcon;
-  Animation<double> _translateButton;
-  Curve _curve = Curves.easeOut;
-  double _fabHeight = 56.0;
-
-  @override
-  initState() {
-    _animationController =
-        AnimationController(vsync: this, duration: Duration(milliseconds: 300))
-          ..addListener(() {
-            setState(() {});
-          });
-    _animateIcon =
-        Tween<double>(begin: 0.0, end: 1.0).animate(_animationController);
-    _buttonColor = ColorTween(
-      begin: Colors.black,
-      end: Colors.red,
-    ).animate(CurvedAnimation(
-      parent: _animationController,
-      curve: Interval(
-        0.00,
-        1.00,
-        curve: Curves.linear,
-      ),
-    ));
-    _translateButton = Tween<double>(
-      begin: _fabHeight,
-      end: -14.0,
-    ).animate(CurvedAnimation(
-      parent: _animationController,
-      curve: Interval(
-        0.0,
-        1.0,
-        curve: _curve,
-      ),
-    ));
-    super.initState();
-  }
-
-  @override
-  dispose() {
-    _animationController.dispose();
-    super.dispose();
-  }
-
-  animate() {
-    if (!isOpened) {
-      _animationController.forward();
-    } else {
-      _animationController.reverse();
-    }
-    isOpened = !isOpened;
-  }
-
-  Widget addNote() {
-    return Container(
-      child: FloatingActionButton(
-        onPressed: () {
-          animate();
-          widget.onPressed(0);
-        },
-        elevation: _animateIcon.value * 6,
-        tooltip: 'Note',
-        heroTag: 'addNoteBtn',
-        child: Icon(Icons.note),
-      ),
-    );
-  }
-
-  Widget addList() {
-    return Container(
-      child: FloatingActionButton(
-        onPressed: () {
-          animate();
-          widget.onPressed(0);
-        },
-        elevation: _animateIcon.value * 6,
-        tooltip: 'Add list',
-        heroTag: 'addListBtn',
-        child: Icon(Icons.list),
-      ),
-    );
-  }
-
-  Widget toggle() {
-    return Container(
-      child: FloatingActionButton(
-        backgroundColor: _buttonColor.value,
-        onPressed: animate,
-        tooltip: 'Toggle',
-        heroTag: 'toogleBtn',
-        child: _animateIcon.value > 0.5
-            ? FadeTransition(
-                opacity: _animateIcon,
-                child: Icon(Icons.close),
-              )
-            : Icon(Icons.add),
-      ),
-    );
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      mainAxisAlignment: MainAxisAlignment.end,
-      children: <Widget>[
-        Transform(
-          transform: Matrix4.translationValues(
-            0.0,
-            _translateButton.value * 2.0,
-            0.0,
-          ),
-          child: addNote(),
-        ),
-        Transform(
-          transform: Matrix4.translationValues(
-            0.0,
-            _translateButton.value * 1.0,
-            0.0,
-          ),
-          child: addList(),
-        ),
-        toggle(),
-      ],
-    );
+  selectNote(Entity toSelect) {
+    if (toSelect.hasT<ShowMenuComponent>())
+      toSelect.remove<ShowMenuComponent>();
+    else
+      toSelect.set(ShowMenuComponent());
   }
 }
