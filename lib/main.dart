@@ -1,75 +1,85 @@
-import 'dart:math';
-
 import 'package:entitas_ff/entitas_ff.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart' show debugPaintSizeEnabled;
 import 'package:notebulk/ecs/components.dart';
 import 'package:notebulk/ecs/systems.dart';
-import 'package:notebulk/pages/homepage.dart';
-import 'package:notebulk/pages/noteFormFeature.dart';
+import 'package:notebulk/mainApp.dart';
+import 'package:notebulk/features/noteFormFeature.dart';
+import 'package:notebulk/pages/splashScreenPage.dart';
 import 'package:notebulk/pages/storageErrorPage.dart';
 import 'package:notebulk/util.dart';
 import 'package:notebulk/widgets/util.dart';
 import 'package:tinycolor/tinycolor.dart';
 
 void main() async {
-  var mainEntityManager = EntityManager();
+  final mainEntityManager = EntityManager();
 
-  mainEntityManager.setUnique(ThemeComponent())
-    ..set(ColorComponent(Colors.purple))
-    ..set(AccentColorComponent(TinyColor(Colors.purple).brighten().color))
-    ..set(DarkModeComponent(true));
+  mainEntityManager.setUnique(SplashScreenTag()).set(Counter(0));
+  mainEntityManager.setUnique(UserSettingsTag())
+    ..set(ThemeColor(Colors.black))
+    ..set(DarkMode(value: true));
+  mainEntityManager
+    ..setUnique(PageIndex(0))
+    ..setUnique(DisplayStatusTag())
+    ..setUnique(FABTag())
+    ..setUnique(StoragePermission(value: false))
+    ..setUnique(SearchBarTag());
 
-  mainEntityManager.setUnique(CurrentPageComponent(0));
-  mainEntityManager.setUnique(OpenMenuComponent(false));
-  mainEntityManager.setUnique(StoragePermissionComponent(false));
-  mainEntityManager.setUnique(SearchBarComponent(false));
-  mainEntityManager.setUnique(KeyboardVisibleComponent(false));
+  final navigatorKey = GlobalKey<NavigatorState>();
 
-  var navigatorKey = GlobalKey<NavigatorState>();
+  debugPaintSizeEnabled = false;
 
   runApp(EntityManagerProvider(
     entityManager: mainEntityManager,
     child: EntityObservingWidget(
-      provider: (em) => em.getUniqueEntity<ThemeComponent>(),
+      provider: (em) => em.getUniqueEntity<UserSettingsTag>(),
       builder: (themeEntity, context) {
+        final darkMode = themeEntity.get<DarkMode>().value;
+        final primaryColor = themeEntity.get<ThemeColor>().value;
+        final accentColor = darkMode
+            ? TinyColor(primaryColor).brighten().color
+            : TinyColor(primaryColor).darken().color;
+
         return GradientBackground(
-          darkMode: themeEntity.get<DarkModeComponent>().darkMode,
-          themeColor: themeEntity.get<ColorComponent>().color,
+          darkMode: darkMode,
+          themeColor: accentColor,
           child: MaterialApp(
             navigatorKey: navigatorKey,
             title: 'Notebulk',
-            initialRoute: Routes.showNotes,
-            onGenerateRoute: (RouteSettings settings) {
+            initialRoute: Routes.splashScreen,
+            onGenerateRoute: (settings) {
               Widget pageWidget;
 
               switch (settings.name) {
+                case Routes.splashScreen:
+                  pageWidget = SplashScreenPage();
+                  break;
                 case Routes.showNotes:
-                  pageWidget = HomePage(
+                  pageWidget = MainApp(
                     entityManager: mainEntityManager,
                   );
                   break;
                 case Routes.createNote:
                   pageWidget = EntityManagerProvider.feature(
                     child: NoteFormFeature(
-                      title: "Criar nota",
+                      title: 'Criar nota',
                     ),
                     system: FeatureSystem(
                       rootEntityManager: mainEntityManager,
                       onCreate: (em, _) {
-                        em.setUnique(FeatureEntityComponent());
+                        em.setUnique(FeatureEntityTag());
                       },
                       onDestroy: (em, root) {
-                        var hasData = em.getUnique<HasDataComponent>();
-                        var note = em.getUniqueEntity<FeatureEntityComponent>();
+                        final hasData = em.getUnique<HasDataTag>();
+                        final note = em.getUniqueEntity<FeatureEntityTag>();
 
                         if (hasData != null)
                           root.createEntity()
-                            ..set(note.get<ContentsComponent>())
-                            ..set(note.get<TagsComponent>())
-                            ..set(note.get<ListComponent>())
-                            ..set(note.get<PictureComponent>())
-                            ..set(PersistNoteComponent())
-                            ..set(note.get<ArchivedComponent>());
+                            ..set(note.get<Contents>())
+                            ..set(note.get<Tags>())
+                            ..set(note.get<Todo>())
+                            ..set(note.get<Picture>())
+                            ..set(PersistMe());
                       },
                     ),
                   );
@@ -77,36 +87,35 @@ void main() async {
                 case Routes.editNote:
                   pageWidget = EntityManagerProvider.feature(
                     child: NoteFormFeature(
-                      title: "Editar nota",
+                      title: 'Editar nota',
                     ),
                     system: FeatureSystem(
                       rootEntityManager: mainEntityManager,
                       onCreate: (em, root) {
-                        var editNote =
-                            root.getUniqueEntity<FeatureEntityComponent>();
+                        final editNote =
+                            root.getUniqueEntity<FeatureEntityTag>();
 
-                        em.setUnique(FeatureEntityComponent())
-                          ..set(editNote.get<ContentsComponent>())
-                          ..set(editNote.get<TagsComponent>())
-                          ..set(editNote.get<ListComponent>())
-                          ..set(editNote.get<DatabaseKeyComponent>())
-                          ..set(editNote.get<PictureComponent>())
-                          ..set(editNote.get<ArchivedComponent>());
+                        em.setUnique(FeatureEntityTag())
+                          ..set(editNote.get<Contents>())
+                          ..set(editNote.get<Tags>())
+                          ..set(editNote.get<Todo>())
+                          ..set(editNote.get<DatabaseKey>())
+                          ..set(editNote.get<Picture>());
 
-                        root.removeUnique<FeatureEntityComponent>();
+                        root.removeUnique<FeatureEntityTag>();
                       },
                       onDestroy: (em, root) {
-                        var hasData = em.getUnique<HasDataComponent>();
-                        var note = em.getUniqueEntity<FeatureEntityComponent>();
+                        final hasData = em.getUnique<HasDataTag>();
+                        final note = em.getUniqueEntity<FeatureEntityTag>();
 
                         if (hasData != null)
                           root.createEntity()
-                            ..set(note.get<ContentsComponent>())
-                            ..set(note.get<TagsComponent>())
-                            ..set(note.get<ListComponent>())
-                            ..set(note.get<DatabaseKeyComponent>())
-                            ..set(note.get<PictureComponent>())
-                            ..set(UpdateNoteComponent());
+                            ..set(note.get<Contents>())
+                            ..set(note.get<Tags>())
+                            ..set(note.get<Todo>())
+                            ..set(note.get<DatabaseKey>())
+                            ..set(note.get<Picture>())
+                            ..set(UpdateMe());
                       },
                     ),
                   );
@@ -122,31 +131,15 @@ void main() async {
               return FadeRoute(page: pageWidget);
             },
             theme: ThemeData(
-                brightness: themeEntity.get<DarkModeComponent>().darkMode
-                    ? Brightness.dark
-                    : Brightness.light,
-                primaryColor: themeEntity.get<ColorComponent>().color,
-                accentColor:
-                    themeEntity.get<AccentColorComponent>().accentColor,
-                toggleableActiveColor:
-                    themeEntity.get<AccentColorComponent>().accentColor,
-                textSelectionColor:
-                    themeEntity.get<AccentColorComponent>().accentColor,
-                textSelectionHandleColor:
-                    themeEntity.get<AccentColorComponent>().accentColor,
-                appBarTheme: AppBarTheme.of(context).copyWith(
-                    color: themeEntity.get<DarkModeComponent>().darkMode
-                        ? Colors.black
-                        : Colors.white,
-                    elevation: 0,
-                    iconTheme: IconThemeData(
-                        color: themeEntity.get<DarkModeComponent>().darkMode
-                            ? Colors.white
-                            : Colors.black),
-                    actionsIconTheme: IconThemeData(
-                        color: themeEntity.get<DarkModeComponent>().darkMode
-                            ? Colors.white
-                            : Colors.black)),
+                fontFamily: 'Ubuntu',
+                brightness: darkMode ? Brightness.dark : Brightness.light,
+                primaryColor: primaryColor,
+                accentColor: accentColor,
+                toggleableActiveColor: accentColor,
+                textSelectionColor: accentColor,
+                textSelectionHandleColor: accentColor,
+                appBarTheme: AppBarTheme.of(context)
+                    .copyWith(color: Colors.transparent, elevation: 0),
                 canvasColor: Colors.transparent,
                 backgroundColor: Colors.transparent,
                 scaffoldBackgroundColor: Colors.transparent,
@@ -161,62 +154,20 @@ void main() async {
     ),
     //Define all application systems in use here.
     system: RootSystem(entityManager: mainEntityManager, systems: [
-      //TickSystem(),
-      NavigationSystem(navigatorKey),
+      DatabaseSystem(),
+      LoadUserSettingsSystem(),
+      PersistUserSettingsSystem(),
+      TickSystem(),
       LoadNotesSystem(),
       PersistNoteSystem(),
       UpdateNoteSystem(),
-      DeleteNoteSystem(),
-      ArchiveNoteSystem(),
-      RestoreNoteSystem()
+      DeleteNotesSystem(),
+      ArchiveNotesSystem(),
+      RestoreNotesSystem(),
+      NavigationSystem(navigatorKey),
+      DisplaySelectedSystem(),
+      ClearSelectedSystem(),
+      SearchSystem()
     ]),
   ));
-}
-
-class LogSystem
-    implements InitSystem, ExecuteSystem, CleanupSystem, ExitSystem {
-  int ticks;
-  int cleaned;
-
-  @override
-  cleanup() {
-    cleaned++;
-  }
-
-  @override
-  execute() {
-    ticks++;
-  }
-
-  @override
-  exit() {
-    print('executed: $ticks times, cleaned: $cleaned');
-    print('end');
-  }
-
-  @override
-  init() {
-    ticks = 0;
-    cleaned = 0;
-    print('init');
-  }
-}
-
-class MockNotesSystem extends EntityManagerSystem implements InitSystem {
-  @override
-  init() {
-    var rnd = Random();
-
-    for (int i = 0; i < 500; i++) {
-      var e = entityManager.createEntity();
-
-      e.set(TimestampComponent(DateTime.now()
-          .add(Duration(days: rnd.nextInt(365)))
-          .toIso8601String()));
-      e.set(ContentsComponent('Nota#$i'));
-      e.set(TagsComponent(['Mock', 'Test', 'DEV', 'Testing', 'ReallyBigOne']));
-
-      if (rnd.nextBool()) e.set(ArchivedComponent());
-    }
-  }
 }

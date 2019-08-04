@@ -1,27 +1,69 @@
+import 'dart:ui';
+
+import 'package:entitas_ff/entitas_ff.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_staggered_grid_view/flutter_staggered_grid_view.dart';
+import 'package:notebulk/ecs/components.dart';
+import 'package:notebulk/widgets/cards.dart';
 import 'package:tinycolor/tinycolor.dart';
 
+Widget buildEmptyNote(String message, [List<ListItem> items = const []]) {
+  return InfoCardWidget(
+    message: message,
+    tags: const ['Dicas', 'Ajuda', 'Informativo'],
+    listItems: items,
+  );
+}
+
+Widget buildNotesGridView(
+    List<Entity> notes, Widget Function(Entity) buildNoteCard,
+    [String emptyMessage, List<ListItem> items = const []]) {
+  return StaggeredGridView.countBuilder(
+    crossAxisCount: 2,
+    itemCount: notes.isEmpty ? 1 : notes.length,
+    mainAxisSpacing: 4,
+    crossAxisSpacing: 4,
+    itemBuilder: (context, index) => notes.isEmpty
+        ? buildEmptyNote(emptyMessage, items)
+        : buildNoteCard(notes[index]),
+    staggeredTileBuilder: (index) => StaggeredTile.fit(1),
+  );
+}
+
+Widget buildNotesListView(
+    List<Entity> notes, Widget Function(Entity) buildNoteCard,
+    [String emptyMessage, List<ListItem> items = const []]) {
+  return ListView.builder(
+    shrinkWrap: true,
+    itemCount: notes.isEmpty ? 1 : notes.length,
+    itemBuilder: (context, index) => notes.isEmpty
+        ? buildEmptyNote(emptyMessage, items)
+        : buildNoteCard(notes[index]),
+  );
+}
+
 class FadeRoute extends PageRouteBuilder {
-  final Widget page;
   FadeRoute({this.page})
       : super(
           pageBuilder: (
-            BuildContext context,
-            Animation<double> animation,
-            Animation<double> secondaryAnimation,
+            context,
+            animation,
+            secondaryAnimation,
           ) =>
               page,
           transitionsBuilder: (
-            BuildContext context,
-            Animation<double> animation,
-            Animation<double> secondaryAnimation,
-            Widget child,
+            context,
+            animation,
+            secondaryAnimation,
+            child,
           ) =>
               FadeTransition(
             opacity: animation,
             child: child,
           ),
         );
+
+  final Widget page;
 }
 
 class GradientLineSeparator extends StatelessWidget {
@@ -32,32 +74,20 @@ class GradientLineSeparator extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.only(left: 16, right: 16, top: 8, bottom: 8),
+      padding: const EdgeInsets.only(top: 8, bottom: 8),
       child: Container(
-        width: double.maxFinite,
-        height: 1,
-        decoration: BoxDecoration(
-            gradient: LinearGradient(
-                begin: Alignment.centerLeft,
-                end: Alignment.centerRight,
-                colors: [
-              Theme.of(context).brightness == Brightness.dark
-                  ? Colors.black
-                  : Colors.white,
-              Theme.of(context).primaryColor
-            ])),
-      ),
+          width: double.maxFinite,
+          height: 1,
+          decoration: BoxDecoration(
+            gradient: RadialGradient(
+                colors: [Theme.of(context).primaryColor, Colors.black],
+                radius: 200.0),
+          )),
     );
   }
 }
 
 class BottomNavigation extends StatelessWidget {
-  final Function(int) onTap;
-  final List<TabItem> items;
-  final int index;
-  final Animation<double> scaleIcon;
-  final Animation<Color> colorIcon;
-
   const BottomNavigation(
       {Key key,
       this.onTap,
@@ -67,18 +97,20 @@ class BottomNavigation extends StatelessWidget {
       this.colorIcon})
       : super(key: key);
 
+  final Function(int) onTap;
+  final List<TabItem> items;
+  final int index;
+  final Animation<double> scaleIcon;
+  final Animation<Color> colorIcon;
+
   @override
   Widget build(BuildContext context) {
     return Container(
+      decoration: BoxDecoration(color: Colors.transparent, boxShadow: const [
+        //BoxShadow(color: Colors.black45, spreadRadius: 2, blurRadius: 8)
+      ]),
       height: kBottomNavigationBarHeight,
       width: MediaQuery.of(context).size.width,
-      decoration: BoxDecoration(
-          color: Theme.of(context).cardColor,
-          border: Border(
-              top: BorderSide(
-                  color: HSVColor.fromColor(Theme.of(context).cardColor)
-                      .withValue(0.5)
-                      .toColor()))),
       child: Stack(
         alignment: Alignment.center,
         children: <Widget>[
@@ -86,31 +118,18 @@ class BottomNavigation extends StatelessWidget {
             mainAxisAlignment: MainAxisAlignment.spaceAround,
             children: <Widget>[
               for (int i = 0; i < items.length; i++)
-                Transform(
+                Transform.scale(
+                  scale: i == index ? scaleIcon.value : 1.0,
                   alignment: Alignment.center,
-                  transform: Matrix4.diagonal3Values(
-                      index == i ? scaleIcon.value : 1.0,
-                      index == i ? scaleIcon.value : 1.0,
-                      1.0),
                   child: GestureDetector(
-                    onTap: () {
-                      onTap(i);
-                    },
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.spaceAround,
-                      mainAxisSize: MainAxisSize.min,
-                      children: <Widget>[
-                        Icon(
-                          items[i].icon,
-                          color: index == i ? colorIcon.value : Colors.grey,
-                        ),
-                        Text(
-                          items[i].label,
-                          style: Theme.of(context).textTheme.caption.copyWith(
-                              color:
-                                  index == i ? colorIcon.value : Colors.grey),
-                        )
-                      ],
+                    onTap: () => onTap(i),
+                    behavior: HitTestBehavior.opaque,
+                    child: Container(
+                      padding: EdgeInsets.all(16),
+                      child: Icon(
+                        items[i].icon,
+                        color: index == i ? colorIcon.value : Colors.grey,
+                      ),
                     ),
                   ),
                 ),
@@ -123,24 +142,24 @@ class BottomNavigation extends StatelessWidget {
 }
 
 class TabItem {
+  const TabItem({this.icon, this.label});
+
   final IconData icon;
   final String label;
-
-  const TabItem({this.icon, this.label});
 }
 
 //Nice gradient background that helps stylize the app.
 class GradientBackground extends StatelessWidget {
-  final bool darkMode;
-  final Color themeColor;
-  final Widget child;
-
   const GradientBackground(
       {Key key,
       this.child,
       this.darkMode = true,
       this.themeColor = Colors.purple})
       : super(key: key);
+
+  final bool darkMode;
+  final Color themeColor;
+  final Widget child;
 
   @override
   Widget build(BuildContext context) {
@@ -149,141 +168,86 @@ class GradientBackground extends StatelessWidget {
             gradient: LinearGradient(
                 begin: Alignment.topCenter,
                 end: Alignment.bottomCenter,
-                stops: [0.2, 1.0],
                 colors: [darkMode ? Colors.black : Colors.white, themeColor])),
         child: child);
   }
 }
 
 class FABMenu extends StatelessWidget {
-  final Animation<Color> toggleButtonColor;
-  final Animation<double> animateIcon;
-  final Animation<double> translateButton;
-  final double _fabHeight = 56.0;
-  final Function(int) onPressed;
-  final VoidCallback onToggle;
-
   const FABMenu(
       {Key key,
       this.toggleButtonColor,
       this.animateIcon,
-      this.translateButton,
       this.onPressed,
       this.onToggle})
       : super(key: key);
 
-  Widget addNote(BuildContext context) {
-    return Container(
-      child: FloatingActionButton(
-        onPressed: () {
-          onPressed(0);
-        },
-        elevation: animateIcon.value * 6,
-        tooltip: 'Note',
-        heroTag: 'addNoteBtn',
-        backgroundColor: Theme.of(context).accentColor,
-        child: Icon(
-          Icons.note,
-          color: TinyColor(Theme.of(context).accentColor).isDark()
-              ? Colors.white
-              : Colors.black,
-        ),
-      ),
-    );
-  }
-
-  Widget addList(BuildContext context) {
-    return Container(
-      child: FloatingActionButton(
-        onPressed: () {
-          onPressed(2);
-        },
-        elevation: animateIcon.value * 6,
-        tooltip: 'Add list',
-        heroTag: 'addListBtn',
-        backgroundColor: Theme.of(context).accentColor,
-        child: Icon(
-          Icons.list,
-          color: TinyColor(Theme.of(context).accentColor).isDark()
-              ? Colors.white
-              : Colors.black,
-        ),
-      ),
-    );
-  }
-
-  Widget addPhoto(BuildContext context) {
-    return Container(
-      child: FloatingActionButton(
-        onPressed: () {
-          onPressed(1);
-        },
-        elevation: animateIcon.value * 6,
-        tooltip: 'Add list',
-        heroTag: 'addPhotoBtn',
-        backgroundColor: Theme.of(context).accentColor,
-        child: Icon(
-          Icons.camera,
-          color: TinyColor(Theme.of(context).accentColor).isDark()
-              ? Colors.white
-              : Colors.black,
-        ),
-      ),
-    );
-  }
+  final Animation<Color> toggleButtonColor;
+  final Animation<double> animateIcon;
+  final double _fabHeight = 56.0;
+  final Function(int) onPressed;
+  final VoidCallback onToggle;
 
   Widget toggle(BuildContext context) {
-    return Container(
-      child: FloatingActionButton(
-        backgroundColor: toggleButtonColor.value,
-        onPressed: onToggle,
-        tooltip: 'Toggle',
-        heroTag: 'toogleBtn',
-        child: animateIcon.value > 0.5
-            ? FadeTransition(
-                opacity: animateIcon,
-                child: Icon(
-                  Icons.close,
-                  color: Theme.of(context).appBarTheme.color,
-                ),
-              )
-            : Icon(
-                Icons.add,
-                color: Theme.of(context).appBarTheme.color,
-              ),
-      ),
+    return FloatingActionButton(
+      heroTag: 'FABToggle',
+      backgroundColor: toggleButtonColor.value,
+      child: Transform.rotate(
+          angle: 0.8 * animateIcon.value,
+          child: Icon(
+            Icons.add,
+            size: 32,
+            color: Theme.of(context).brightness == Brightness.dark
+                ? Colors.black
+                : Colors.white,
+          )),
+      onPressed: onToggle,
     );
   }
 
   @override
   Widget build(BuildContext context) {
+    final icons = [Icons.note, Icons.list, Icons.camera];
+    final iconColor = TinyColor(Theme.of(context).accentColor).isDark()
+        ? Colors.white
+        : Colors.black;
     return Stack(
       children: <Widget>[
         SizedBox(
-          height: _fabHeight * 3,
-          width: _fabHeight * 4,
+          height: _fabHeight * 5,
+          width: _fabHeight,
         ),
-        Positioned(
-          top: translateButton.value + _fabHeight,
-          left: translateButton.value + _fabHeight / 2,
-          child: addNote(context),
-        ),
-        Positioned(
-          top: translateButton.value + _fabHeight,
-          left: _fabHeight * 1.5,
-          child: addPhoto(context),
-        ),
-        Positioned(
-          top: translateButton.value + _fabHeight,
-          left: -translateButton.value + _fabHeight * 2.5,
-          child: addList(context),
-        ),
-        Positioned(
-          bottom: 0,
-          left: _fabHeight * 1.5,
-          child: toggle(context),
-        ),
+        for (int i = 0; i < 3; i++)
+          Positioned(
+              bottom:
+                  (i * (_fabHeight + 8) + (_fabHeight + 8)) * animateIcon.value,
+              child: FloatingActionButton(
+                heroTag: 'FAB$i',
+                child: Icon(icons[2 - i], color: iconColor),
+                elevation: 8 * animateIcon.value,
+                onPressed: () => onPressed(2 - i),
+              )),
+        Positioned(right: 0, bottom: 0, child: toggle(context))
       ],
     );
+  }
+}
+
+class ClippableShadowPainter extends CustomPainter {
+  ClippableShadowPainter({@required this.shadow, @required this.clipper});
+
+  final Shadow shadow;
+  final CustomClipper<Path> clipper;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = shadow.toPaint();
+    final clipPath = clipper.getClip(size).shift(shadow.offset);
+    canvas.drawPath(clipPath, paint);
+  }
+
+  @override
+  bool shouldRepaint(CustomPainter oldDelegate) {
+    return true;
   }
 }

@@ -4,185 +4,174 @@ import 'package:entitas_ff/entitas_ff.dart';
 import 'package:flutter/material.dart';
 import 'package:sembast/sembast.dart';
 
-class DatabaseComponent extends UniqueComponent {
-  final Database db;
+class DatabaseService extends UniqueComponent {
+  DatabaseService(this.value);
 
-  DatabaseComponent(this.db);
+  final Database value;
 }
 
-class DatabaseKeyComponent extends Component {
-  final int dbKey;
+class DatabaseKey extends Component {
+  DatabaseKey(this.value);
 
-  DatabaseKeyComponent(this.dbKey);
+  final int value;
 }
 
 //Note Entity components
-class ShowMenuComponent extends Component {}
+class Timestamp extends Component {
+  Timestamp(String _timestamp) : value = DateTime.parse(_timestamp);
 
-class TimestampComponent extends Component {
-  final DateTime timestamp;
-
-  TimestampComponent(String _timestamp)
-      : timestamp = DateTime.parse(_timestamp);
+  final DateTime value;
 }
 
-class PictureComponent extends Component {
-  final File pic;
+class Picture extends Component {
+  Picture(String path) : value = File(path);
 
-  PictureComponent(String path) : pic = File(path);
+  final File value;
 }
 
-class ContentsComponent extends Component {
-  final String contents;
+class Contents extends Component {
+  Contents(this.value);
 
-  ContentsComponent(this.contents);
+  final String value;
 }
 
-class TagsComponent extends Component {
-  final List<String> tags;
+class Tags extends Component {
+  Tags(this.value);
 
-  TagsComponent(this.tags);
+  final List<String> value;
 }
 
-class ArchivedComponent extends Component {}
+class Archived extends Component {}
 
-class ListComponent extends Component {
-  final List<ListItem> items;
+class Todo extends Component {
+  Todo({this.value = const <ListItem>[]});
 
-  ListComponent({this.items = const <ListItem>[]});
+  final List<ListItem> value;
 }
 
 class ListItem {
-  bool isChecked;
-  String label;
-
   ListItem(this.label, {this.isChecked = false});
 
-  factory ListItem.fromJson(Map<String, dynamic> json) =>
-      ListItem(json['label'], isChecked: json['isChecked']);
+  ListItem.fromJson(Map<String, dynamic> map)
+      : label = map['label'],
+        isChecked = map['isChecked'];
+
+  bool isChecked;
+  String label;
 
   Map<String, dynamic> toJson() => {'label': label, 'isChecked': isChecked};
 
   @override
-  String toString() => "label: $label, isChecked: $isChecked";
+  String toString() => 'label: $label, isChecked: $isChecked';
 
   @override
   int get hashCode => label.hashCode ^ isChecked.hashCode;
 
-  operator ==(dynamic other) =>
-      other is ListItem && other.hashCode == this.hashCode;
+  @override
+  bool operator ==(dynamic other) =>
+      other is ListItem && other.hashCode == hashCode;
 }
 
 //System components
-class ErrorComponent extends UniqueComponent {
-  final String error;
-
-  ErrorComponent(this.error);
-}
-
 enum NavigationOps { push, pop, replace, showDialog }
 
-class NavigationSystemComponent extends UniqueComponent {
-  final String routeName;
-  final NavigationOps routeOp;
+class NavigationEvent extends UniqueComponent {
+  NavigationEvent(
+      {@required this.routeName, this.routeOp = NavigationOps.push});
 
-  NavigationSystemComponent.pop()
+  NavigationEvent.pop()
       : routeName = '',
         routeOp = NavigationOps.pop;
 
-  NavigationSystemComponent.push(String name)
-      : routeName = name,
-        routeOp = NavigationOps.push;
+  NavigationEvent.push(this.routeName) : routeOp = NavigationOps.push;
 
-  NavigationSystemComponent.showDialog(String name)
-      : routeName = name,
-        routeOp = NavigationOps.showDialog;
+  NavigationEvent.showDialog(this.routeName)
+      : routeOp = NavigationOps.showDialog;
 
-  NavigationSystemComponent.replace(String name)
-      : routeName = name,
-        routeOp = NavigationOps.replace;
+  NavigationEvent.replace(this.routeName) : routeOp = NavigationOps.replace;
 
-  NavigationSystemComponent(
-      {this.routeName, this.routeOp = NavigationOps.push});
+  final String routeName;
+  final NavigationOps routeOp;
 }
 
-class CurrentPageComponent extends UniqueComponent {
-  final int index;
+class PageIndex extends UniqueComponent {
+  PageIndex([this.value = 0]);
 
-  CurrentPageComponent([this.index = 0]);
+  final int value;
 }
 
-class StoragePermissionComponent extends UniqueComponent {
-  final bool granted;
+class StoragePermission extends UniqueComponent {
+  StoragePermission({this.value = true});
 
-  StoragePermissionComponent([this.granted = true]);
+  final bool value;
 }
 
-class RefreshNotesComponent extends UniqueComponent {}
+class Ready extends Component {}
 
-class FeatureEntityComponent extends UniqueComponent {}
+class LoadUserSettingsEvent extends UniqueComponent {}
 
-class HasDataComponent extends UniqueComponent {}
+class RefreshNotesEvent extends UniqueComponent {}
 
-class PersistNoteComponent extends Component {}
+class DeleteNotesEvent extends UniqueComponent {}
 
-class UpdateNoteComponent extends Component {}
+class ArchiveNotesEvent extends UniqueComponent {}
 
-class DeleteNoteComponent extends Component {}
+class RestoreNotesEvent extends UniqueComponent {}
 
-class ThemeComponent extends UniqueComponent {}
+class FeatureEntityTag extends UniqueComponent {}
 
-class ColorComponent extends Component {
-  final Color color;
+class HasDataTag extends UniqueComponent {}
 
-  ColorComponent(this.color);
+class PersistMe extends Component {}
+
+class UpdateMe extends Component {}
+
+class DisplayStatusTag extends UniqueComponent {}
+
+class SplashScreenTag extends UniqueComponent {}
+
+class Selected extends Component {}
+
+class SearchResult extends Component {}
+
+class SearchTerm extends Component {
+  SearchTerm(this.value);
+
+  final String value;
 }
 
-class AccentColorComponent extends Component {
-  final Color accentColor;
+class PerformSearchEvent extends UniqueComponent {}
 
-  AccentColorComponent(this.accentColor);
+class Counter extends Component {
+  Counter(this.value);
+
+  final int value;
 }
 
-class DarkModeComponent extends Component {
-  final bool darkMode;
+class UserSettingsTag extends UniqueComponent {}
 
-  DarkModeComponent([this.darkMode = true]);
+class ThemeColor extends Component {
+  ThemeColor(this.value);
+
+  final Color value;
 }
 
-class OpenMenuComponent extends UniqueComponent {
-  final bool isOpen;
+class DarkMode extends Component {
+  DarkMode({this.value = true});
 
-  OpenMenuComponent([this.isOpen = false]);
+  final bool value;
 }
 
-class MainTickComponent extends UniqueComponent {
-  final int tick;
+class Toggle extends Component {}
 
-  MainTickComponent(this.tick);
+class FABTag extends UniqueComponent {}
+
+class MainTickTag extends UniqueComponent {}
+
+class Tick extends Component {
+  Tick(this.value);
+
+  final int value;
 }
 
-class TickComponent extends Component {
-  final int tick;
-
-  TickComponent(this.tick);
-}
-
-class SearchBarComponent extends UniqueComponent {
-  final bool isOpen;
-
-  SearchBarComponent([this.isOpen = false]);
-}
-
-class KeyboardVisibleComponent extends UniqueComponent {
-  final bool isVisible;
-
-  KeyboardVisibleComponent(this.isVisible);
-}
-
-class FormDataComponent extends UniqueComponent {
-  final String contents;
-  final String tags;
-
-  FormDataComponent({this.contents, this.tags});
-}
+class SearchBarTag extends UniqueComponent {}
