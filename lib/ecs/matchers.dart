@@ -2,7 +2,7 @@ import 'package:entitas_ff/entitas_ff.dart';
 import 'package:notebulk/ecs/components.dart';
 
 //A valid Note Entity has timestamp, contents and possible tags & todo items.
-class Matchers {
+mixin Matchers {
   static EntityMatcher note = EntityMatcher(
       all: [Timestamp, Contents],
       none: [Archived],

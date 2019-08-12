@@ -10,15 +10,17 @@ class SearchPage extends StatelessWidget {
   const SearchPage({Key key, this.entityManager}) : super(key: key);
 
   final EntityManager entityManager;
-  static const String emptyMessage = 'Sua pesquisa não retornou resultados.';
 
   @override
   Widget build(BuildContext context) {
+    final localization =
+        entityManager.getUniqueEntity<AppSettingsTag>().get<Localization>();
+
     return Scaffold(
       appBar: AppBar(
         title: TextFormField(
           decoration: InputDecoration(
-              hintText: 'Pesquise por tags', icon: Icon(Icons.search)),
+              hintText: localization.searchNotesHint, icon: Icon(Icons.search)),
           initialValue: entityManager
               .getUniqueEntity<SearchBarTag>()
               .get<SearchTerm>()
@@ -33,15 +35,17 @@ class SearchPage extends StatelessWidget {
         ),
       ),
       body: Padding(
-          padding: EdgeInsets.symmetric(vertical: 4, horizontal: 8),
-          child: GroupObservingWidget(
-              matcher: Matchers.searchResult,
-              builder: (group, context) {
-                final notesList = group.entities;
+        padding: EdgeInsets.symmetric(vertical: 4, horizontal: 8),
+        child: GroupObservingWidget(
+          matcher: Matchers.searchResult,
+          builder: (group, context) {
+            final notesList = group.entities;
 
-                return buildNotesListView(
-                    notesList, buildNoteCard, emptyMessage);
-              })),
+            return buildNotesListView(notesList, buildNoteCard,
+                localization.emptySearchHint, localization.emptySearchTodo);
+          },
+        ),
+      ),
     );
   }
 

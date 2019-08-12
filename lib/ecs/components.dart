@@ -4,6 +4,14 @@ import 'package:entitas_ff/entitas_ff.dart';
 import 'package:flutter/material.dart';
 import 'package:sembast/sembast.dart';
 
+class SetupLocalizationEvent extends UniqueComponent {
+  SetupLocalizationEvent(this.context);
+
+  final BuildContext context;
+}
+
+class SetupDatabaseEvent extends UniqueComponent {}
+
 class DatabaseService extends UniqueComponent {
   DatabaseService(this.value);
 
@@ -94,8 +102,16 @@ class NavigationEvent extends UniqueComponent {
   final NavigationOps routeOp;
 }
 
-class PageIndex extends UniqueComponent {
-  PageIndex([this.value = 0]);
+class PageNavigationTag extends UniqueComponent {}
+
+class CurrentIndex extends Component {
+  CurrentIndex([this.value = 0]);
+
+  final int value;
+}
+
+class NextIndex extends Component {
+  NextIndex(this.value);
 
   final int value;
 }
@@ -118,9 +134,13 @@ class ArchiveNotesEvent extends UniqueComponent {}
 
 class RestoreNotesEvent extends UniqueComponent {}
 
+class ExportNotesEvent extends UniqueComponent {}
+
+class ImportNotesEvent extends UniqueComponent {}
+
 class FeatureEntityTag extends UniqueComponent {}
 
-class HasDataTag extends UniqueComponent {}
+class Changed extends Component {}
 
 class PersistMe extends Component {}
 
@@ -148,8 +168,6 @@ class Counter extends Component {
   final int value;
 }
 
-class UserSettingsTag extends UniqueComponent {}
-
 class ThemeColor extends Component {
   ThemeColor(this.value);
 
@@ -175,3 +193,5 @@ class Tick extends Component {
 }
 
 class SearchBarTag extends UniqueComponent {}
+
+class AppSettingsTag extends UniqueComponent {}

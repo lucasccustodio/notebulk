@@ -31,7 +31,8 @@ class StorageErrorPage extends StatelessWidget {
 
                 if (status == PermissionStatus.allow) {
                   entityManager
-                      .setUnique(NavigationEvent.replace(Routes.showNotes));
+                    ..setUnique(SetupDatabaseEvent())
+                    ..setUnique(NavigationEvent.replace(Routes.splashScreen));
                 }
               },
             )

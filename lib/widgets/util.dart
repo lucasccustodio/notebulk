@@ -7,26 +7,46 @@ import 'package:notebulk/ecs/components.dart';
 import 'package:notebulk/widgets/cards.dart';
 import 'package:tinycolor/tinycolor.dart';
 
-Widget buildEmptyNote(String message, [List<ListItem> items = const []]) {
+Widget buildEmptyNote(String message,
+    [List<ListItem> items = const [], List<String> tags = const []]) {
   return InfoCardWidget(
     message: message,
-    tags: const ['Dicas', 'Ajuda', 'Informativo'],
+    tags: tags,
     listItems: items,
   );
 }
 
 Widget buildNotesGridView(
     List<Entity> notes, Widget Function(Entity) buildNoteCard,
-    [String emptyMessage, List<ListItem> items = const []]) {
+    [String emptyMessage, List<ListItem> items = const [], List<String> tags]) {
   return StaggeredGridView.countBuilder(
+    padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
     crossAxisCount: 2,
     itemCount: notes.isEmpty ? 1 : notes.length,
     mainAxisSpacing: 4,
     crossAxisSpacing: 4,
     itemBuilder: (context, index) => notes.isEmpty
-        ? buildEmptyNote(emptyMessage, items)
+        ? buildEmptyNote(emptyMessage, items, tags)
         : buildNoteCard(notes[index]),
     staggeredTileBuilder: (index) => StaggeredTile.fit(1),
+  );
+}
+
+Widget buildNotesSliverGridView(
+    List<Entity> notes, Widget Function(Entity) buildNoteCard,
+    [String emptyMessage, List<ListItem> items = const [], List<String> tags]) {
+  return SliverPadding(
+    padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+    sliver: SliverStaggeredGrid.countBuilder(
+      crossAxisCount: 2,
+      itemCount: notes.isEmpty ? 1 : notes.length,
+      mainAxisSpacing: 4,
+      crossAxisSpacing: 4,
+      itemBuilder: (context, index) => notes.isEmpty
+          ? buildEmptyNote(emptyMessage, items, tags)
+          : buildNoteCard(notes[index]),
+      staggeredTileBuilder: (index) => StaggeredTile.fit(1),
+    ),
   );
 }
 
@@ -89,12 +109,13 @@ class GradientLineSeparator extends StatelessWidget {
 
 class BottomNavigation extends StatelessWidget {
   const BottomNavigation(
-      {Key key,
-      this.onTap,
-      this.items,
+      {@required this.onTap,
+      @required this.items,
+      Key key,
       this.index = 0,
       this.scaleIcon,
-      this.colorIcon})
+      this.colorIcon,
+      this.containerColor = Colors.transparent})
       : super(key: key);
 
   final Function(int) onTap;
@@ -102,13 +123,12 @@ class BottomNavigation extends StatelessWidget {
   final int index;
   final Animation<double> scaleIcon;
   final Animation<Color> colorIcon;
+  final Color containerColor;
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      decoration: BoxDecoration(color: Colors.transparent, boxShadow: const [
-        //BoxShadow(color: Colors.black45, spreadRadius: 2, blurRadius: 8)
-      ]),
+      decoration: BoxDecoration(color: containerColor),
       height: kBottomNavigationBarHeight,
       width: MediaQuery.of(context).size.width,
       child: Stack(
@@ -124,11 +144,15 @@ class BottomNavigation extends StatelessWidget {
                   child: GestureDetector(
                     onTap: () => onTap(i),
                     behavior: HitTestBehavior.opaque,
-                    child: Container(
-                      padding: EdgeInsets.all(16),
+                    child: SizedBox(
+                      width: MediaQuery.of(context).size.width /
+                          items.length *
+                          0.75,
                       child: Icon(
                         items[i].icon,
-                        color: index == i ? colorIcon.value : Colors.grey,
+                        color: index == i
+                            ? colorIcon.value
+                            : Theme.of(context).accentColor,
                       ),
                     ),
                   ),
@@ -174,19 +198,27 @@ class GradientBackground extends StatelessWidget {
 }
 
 class FABMenu extends StatelessWidget {
-  const FABMenu(
-      {Key key,
-      this.toggleButtonColor,
-      this.animateIcon,
-      this.onPressed,
-      this.onToggle})
-      : super(key: key);
+  const FABMenu({
+    @required this.onPressed,
+    @required this.onToggle,
+    @required int numButtons,
+    @required List<IconData> buttonIcons,
+    Key key,
+    this.toggleButtonColor,
+    this.animateIcon,
+  })  : assert(buttonIcons.length == numButtons,
+            'buttonIcons.length must be atleast equal to numButtons'),
+        _numButtons = numButtons,
+        _buttonIcons = buttonIcons,
+        super(key: key);
 
   final Animation<Color> toggleButtonColor;
   final Animation<double> animateIcon;
   final double _fabHeight = 56.0;
   final Function(int) onPressed;
   final VoidCallback onToggle;
+  final int _numButtons;
+  final List<IconData> _buttonIcons;
 
   Widget toggle(BuildContext context) {
     return FloatingActionButton(
@@ -207,25 +239,24 @@ class FABMenu extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final icons = [Icons.note, Icons.list, Icons.camera];
     final iconColor = TinyColor(Theme.of(context).accentColor).isDark()
         ? Colors.white
         : Colors.black;
     return Stack(
       children: <Widget>[
         SizedBox(
-          height: _fabHeight * 5,
+          height: _fabHeight * (_numButtons + 2),
           width: _fabHeight,
         ),
-        for (int i = 0; i < 3; i++)
+        for (int i = 0; i < _numButtons; i++)
           Positioned(
               bottom:
-                  (i * (_fabHeight + 8) + (_fabHeight + 8)) * animateIcon.value,
+                  ((_fabHeight + 8) * (_numButtons - i)) * animateIcon.value,
               child: FloatingActionButton(
                 heroTag: 'FAB$i',
-                child: Icon(icons[2 - i], color: iconColor),
-                elevation: 8 * animateIcon.value,
-                onPressed: () => onPressed(2 - i),
+                child: Icon(_buttonIcons[i], color: iconColor),
+                elevation: animateIcon.value,
+                onPressed: () => onPressed(i),
               )),
         Positioned(right: 0, bottom: 0, child: toggle(context))
       ],

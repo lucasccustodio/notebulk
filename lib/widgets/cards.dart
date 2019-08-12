@@ -20,9 +20,14 @@ class InfoCardWidget extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final localization = EntityManagerProvider.of(context)
+        .entityManager
+        .getUniqueEntity<AppSettingsTag>()
+        .get<Localization>();
+
     return Card(
       clipBehavior: Clip.antiAlias,
-      elevation: 8,
+      elevation: 4,
       margin: EdgeInsets.all(0),
       child: Stack(
         children: <Widget>[
@@ -32,7 +37,10 @@ class InfoCardWidget extends StatelessWidget {
               mainAxisAlignment: MainAxisAlignment.start,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: <Widget>[
-                buildTimestamp(context, DateTime.now()),
+                buildTimestamp(context, DateTime.now(), localization),
+                SizedBox(
+                  height: 8,
+                ),
                 buildContentsField(context, message),
                 if (listItems.isNotEmpty) buildListField(listItems, context),
                 GradientLineSeparator(),
@@ -98,12 +106,13 @@ class InfoCardWidget extends StatelessWidget {
     );
   }
 
-  Widget buildTimestamp(BuildContext context, DateTime timestamp) {
+  Widget buildTimestamp(
+      BuildContext context, DateTime timestamp, Localization localization) {
     final style = Theme.of(context).textTheme.title.copyWith(
         fontFamily: 'OpenSans', fontSize: 12, fontWeight: FontWeight.w700);
 
     return Text(
-      formatTimestamp(timestamp),
+      formatTimestamp(timestamp, localization),
       style: style,
     );
   }
@@ -116,8 +125,6 @@ class InfoCardWidget extends StatelessWidget {
     return Padding(
       padding: padding,
       child: Text(tags.join(', '),
-          textWidthBasis: TextWidthBasis.parent,
-          textAlign: TextAlign.justify,
           style: style.copyWith(
             fontFamily: 'OpenSans',
             fontSize: 12,
@@ -141,19 +148,19 @@ class NoteCardWidget extends StatelessWidget {
     final listItems = noteEntity.get<Todo>()?.value ?? <ListItem>[];
     final picFile = noteEntity.get<Picture>()?.value;
     final isSelected = noteEntity.hasT<Selected>();
+    final localization = EntityManagerProvider.of(context)
+        .entityManager
+        .getUniqueEntity<AppSettingsTag>()
+        .get<Localization>();
 
     return Container(
-      foregroundDecoration:
-          BoxDecoration(color: Colors.transparent, boxShadow: [
-        if (isSelected)
-          BoxShadow(
-              color: Theme.of(context).accentColor.withOpacity(0.5),
-              spreadRadius: 2,
-              blurRadius: 2)
-      ]),
+      foregroundDecoration: isSelected
+          ? BoxDecoration(
+              color: Theme.of(context).accentColor.withOpacity(0.75))
+          : null,
       child: Card(
         clipBehavior: Clip.antiAlias,
-        elevation: 8,
+        elevation: 4,
         margin: EdgeInsets.all(0),
         child: Stack(
           children: <Widget>[
@@ -163,7 +170,10 @@ class NoteCardWidget extends StatelessWidget {
                 mainAxisAlignment: MainAxisAlignment.start,
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: <Widget>[
-                  buildTimestamp(context, timestamp),
+                  buildTimestamp(context, timestamp, localization),
+                  SizedBox(
+                    height: 8,
+                  ),
                   if (picFile != null) buildPicField(picFile),
                   buildContentsField(context, contents),
                   if (listItems.isNotEmpty) buildListField(listItems, context),
@@ -183,12 +193,15 @@ class NoteCardWidget extends StatelessWidget {
 
     return Card(
       margin: margin,
-      elevation: 8,
-      child: AspectRatio(
-        aspectRatio: 4 / 3,
-        child: Image.file(
-          picFile,
-          fit: BoxFit.fill,
+      elevation: 2,
+      child: Hero(
+        tag: picFile.path,
+        child: AspectRatio(
+          aspectRatio: 4 / 3,
+          child: Image.file(
+            picFile,
+            fit: BoxFit.fill,
+          ),
         ),
       ),
     );
@@ -247,12 +260,13 @@ class NoteCardWidget extends StatelessWidget {
     );
   }
 
-  Widget buildTimestamp(BuildContext context, DateTime timestamp) {
+  Widget buildTimestamp(
+      BuildContext context, DateTime timestamp, Localization localization) {
     final style = Theme.of(context).textTheme.title.copyWith(
         fontFamily: 'OpenSans', fontSize: 12, fontWeight: FontWeight.w700);
 
     return Text(
-      formatTimestamp(timestamp),
+      formatTimestamp(timestamp, localization),
       style: style,
     );
   }

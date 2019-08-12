@@ -1,7 +1,7 @@
 import 'package:entitas_ff/entitas_ff.dart';
 import 'package:flutter/material.dart';
-import 'package:notebulk/ecs/components.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:notebulk/ecs/components.dart';
 import 'package:notebulk/util.dart';
 import 'package:path_provider/path_provider.dart';
 
@@ -14,83 +14,53 @@ class NoteFormFeature extends StatefulWidget {
   _NoteFormFeatureState createState() => _NoteFormFeatureState();
 }
 
-class _NoteFormFeatureState extends State<NoteFormFeature>
-    with WidgetsBindingObserver {
+class _NoteFormFeatureState extends State<NoteFormFeature> {
   GlobalKey<FormState> key = GlobalKey<FormState>();
-
-  @override
-  void initState() {
-    WidgetsBinding.instance.addObserver(this);
-    super.initState();
-  }
-
-  @override
-  void dispose() {
-    WidgetsBinding.instance.removeObserver(this);
-    super.dispose();
-  }
-
-  @override
-  void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state == AppLifecycleState.resumed) {
-      retrieveLostData(context);
-    }
-  }
-
-  Future<void> retrieveLostData(BuildContext context) async {
-    final response = await ImagePicker.retrieveLostData();
-
-    if (response == null) {
-      return;
-    }
-    if (response.file != null) {
-      final em = EntityManagerProvider.of(context).entityManager;
-
-      final timestamp = DateTime.now().millisecondsSinceEpoch.toString();
-      final path = await getExternalStorageDirectory();
-      final newPath = '$path/Pictures/$timestamp.jpeg';
-      response.file
-        ..copySync(newPath)
-        ..deleteSync();
-      em.getUniqueEntity<FeatureEntityTag>().set(Picture(newPath));
-    }
-  }
 
   @override
   Widget build(BuildContext context) {
     final entityManager = EntityManagerProvider.of(context).entityManager;
+    final localization =
+        entityManager.getUniqueEntity<AppSettingsTag>().get<Localization>();
 
     void closeFeature() {
       Navigator.of(context).pop(true);
     }
 
+    void closeDialog() {
+      Navigator.of(context).pop(false);
+    }
+
     return WillPopScope(
       onWillPop: () async {
-        return showDialog(
-            context: context,
-            builder: (context) => AlertDialog(
-                  title: Text(
-                    'Salvar as alterações?',
-                  ),
-                  actions: <Widget>[
-                    FlatButton(
-                      child: Text('Não'),
-                      onPressed: closeFeature,
+        if (!entityManager
+            .getUniqueEntity<FeatureEntityTag>()
+            .hasT<Changed>()) {
+          return true;
+        } else {
+          return showDialog(
+              context: context,
+              builder: (context) => AlertDialog(
+                    title: Text(
+                      'Você fez alterações que ainda não foram salvas. Sair mesmo assim?',
                     ),
-                    FlatButton(
-                      child: Text('Sim'),
-                      onPressed: () {
-                        if (key.currentState.validate())
-                          key.currentState.save();
-                        else
-                          return;
-
-                        entityManager.setUnique(HasDataTag());
-                        closeFeature();
-                      },
-                    ),
-                  ],
-                ));
+                    actions: <Widget>[
+                      FlatButton(
+                        child: Text('Não'),
+                        onPressed: closeDialog,
+                      ),
+                      FlatButton(
+                        child: Text('Sim'),
+                        onPressed: () {
+                          entityManager
+                              .getUniqueEntity<FeatureEntityTag>()
+                              .remove<PersistMe>();
+                          closeFeature();
+                        },
+                      ),
+                    ],
+                  ));
+        }
       },
       child: Scaffold(
         resizeToAvoidBottomInset: true,
@@ -106,15 +76,41 @@ class _NoteFormFeatureState extends State<NoteFormFeature>
                   floating: true,
                   pinned: true,
                   leading: BackButton(),
-                  backgroundColor: Colors.black54,
+                  backgroundColor:
+                      Theme.of(context).accentColor.withOpacity(0.5),
+                  actions: <Widget>[
+                    EntityObservingWidget(
+                      provider: (em) => em.getUniqueEntity<FeatureEntityTag>(),
+                      builder: (noteEntity, context) => FlatButton(
+                        child: Text(localization.saveChangesFeatureLabel),
+                        onPressed: noteEntity.hasT<Changed>()
+                            ? () {
+                                if (key.currentState.validate())
+                                  key.currentState.save();
+                                else
+                                  return;
+
+                                entityManager
+                                    .getUniqueEntity<FeatureEntityTag>()
+                                    .set(PersistMe());
+
+                                closeFeature();
+                              }
+                            : null,
+                      ),
+                    ),
+                  ],
                   title: Padding(
                     padding: const EdgeInsets.only(left: 16),
-                    child: Text(
-                      widget.title,
-                      style: Theme.of(context)
-                          .textTheme
-                          .headline
-                          .copyWith(fontWeight: FontWeight.w400),
+                    child: EntityObservingWidget(
+                      provider: (em) => em.getUniqueEntity<FeatureEntityTag>(),
+                      builder: (noteEntity, context) => Text(
+                        "${widget.title}${noteEntity.hasT<Changed>() ? '*' : ''}",
+                        style: Theme.of(context)
+                            .textTheme
+                            .headline
+                            .copyWith(fontWeight: FontWeight.w400),
+                      ),
                     ),
                   ),
                 ),
@@ -126,7 +122,7 @@ class _NoteFormFeatureState extends State<NoteFormFeature>
                         provider: (em) =>
                             em.getUniqueEntity<FeatureEntityTag>(),
                         builder: (noteEntity, context) =>
-                            buildNoteCard(noteEntity),
+                            buildNoteCard(noteEntity, localization),
                       ),
                     )),
               ],
@@ -137,7 +133,7 @@ class _NoteFormFeatureState extends State<NoteFormFeature>
     );
   }
 
-  Card buildNoteCard(Entity noteEntity) {
+  Card buildNoteCard(Entity noteEntity, Localization localization) {
     final timestamp = DateTime.now();
 
     return Card(
@@ -150,68 +146,64 @@ class _NoteFormFeatureState extends State<NoteFormFeature>
           mainAxisAlignment: MainAxisAlignment.start,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: <Widget>[
-            buildTimestamp(timestamp),
+            buildTimestamp(timestamp, localization),
             Padding(
               padding: const EdgeInsets.only(top: 8.0),
-              child: Text('Imagem'),
+              child: Text(localization.featureImageLabel),
             ),
-            buildPicField(noteEntity),
-            buildContentsField(noteEntity),
+            buildPicField(noteEntity, localization),
+            buildContentsField(noteEntity, localization),
             Padding(
               padding: const EdgeInsets.only(top: 8.0),
-              child: Text('Lista'),
+              child: Text(localization.featureTodoLabel),
             ),
-            buildListField(noteEntity),
+            buildListField(noteEntity, localization),
             Padding(
               padding: const EdgeInsets.only(top: 8.0),
-              child: Text('Tags'),
+              child: Text(localization.featureTagsLabel),
             ),
-            buildTagsField(noteEntity),
+            buildTagsField(noteEntity, localization),
           ],
         ),
       ),
     );
   }
 
-  Widget buildTimestamp(DateTime timestamp) {
+  Widget buildTimestamp(DateTime timestamp, Localization localization) {
     return Padding(
       padding: const EdgeInsets.only(top: 16, bottom: 4),
       child: Text(
-        formatTimestamp(timestamp),
+        formatTimestamp(timestamp, localization),
         style: Theme.of(context).textTheme.title.copyWith(
             fontFamily: 'OpenSans', fontSize: 16, fontWeight: FontWeight.w700),
       ),
     );
   }
 
-  Widget buildContentsField(Entity noteEntity) {
+  Widget buildContentsField(Entity noteEntity, Localization localization) {
     return Padding(
       padding: const EdgeInsets.only(top: 16, bottom: 4),
       child: TextFormField(
         initialValue: noteEntity.get<Contents>()?.value ?? '',
         decoration: InputDecoration(
-          hintText: 'Sobre o que é essa anotação?',
-          labelText: 'Conteúdo',
+          hintText: localization.featureContentsHint,
+          labelText: localization.featureContentsLabel,
         ),
-        onSaved: (contents) => noteEntity.set(Contents(contents)),
+        onSaved: (contents) {
+          noteEntity.set(Contents(contents));
+        },
+        onChanged: (_) {
+          noteEntity.set(Changed());
+        },
         validator: (contents) =>
-            contents.isEmpty ? 'Não pode ficar vazio.' : null,
+            contents.isEmpty ? localization.featureContentsError : null,
         textAlign: TextAlign.left,
       ),
     );
   }
 
-  Widget buildListField(Entity noteEntity) {
-    final items = noteEntity.get<Todo>()?.value;
-
-    if (items == null)
-      return FlatButton.icon(
-        icon: Icon(Icons.add),
-        label: Text('Adicionar lista'),
-        onPressed: () {
-          noteEntity.set(Todo(value: [ListItem('')]));
-        },
-      );
+  Widget buildListField(Entity noteEntity, Localization localization) {
+    final items = noteEntity.get<Todo>()?.value ?? [];
 
     return Padding(
       padding: const EdgeInsets.only(top: 8, bottom: 16),
@@ -226,11 +218,14 @@ class _NoteFormFeatureState extends State<NoteFormFeature>
                     initialValue: items[index].label,
                     textAlign: TextAlign.left,
                     decoration: InputDecoration(
-                      hintText: 'Nome do item',
-                      labelText: 'Item nº ${index + 1}',
+                      hintText: localization.featureTodoLabel,
+                      labelText: localization.featureTodoItemLabel,
                     ),
-                    onSaved: (item) => noteEntity
-                        .update<Todo>((old) => old..value[index].label = item),
+                    onSaved: (item) {
+                      noteEntity.update<Todo>(
+                          (old) => old..value[index].label = item);
+                    },
+                    onChanged: (_) => noteEntity.set(Changed()),
                     style: Theme.of(context).textTheme.body1.copyWith(
                         decoration: items[index].isChecked
                             ? TextDecoration.lineThrough
@@ -240,33 +235,33 @@ class _NoteFormFeatureState extends State<NoteFormFeature>
                     icon: Icon(Icons.delete),
                     onPressed: () {
                       noteEntity
-                          .update<Todo>((old) => old..value.removeAt(index));
+                        ..update<Todo>((old) => old..value.removeAt(index))
+                        ..set(Changed());
                     },
                   ),
-                  onChanged: (value) => noteEntity.update<Todo>(
-                      (old) => old..value[index].isChecked = value)),
+                  onChanged: (value) {
+                    noteEntity
+                      ..update<Todo>(
+                          (old) => old..value[index].isChecked = value)
+                      ..set(Changed());
+                  }),
             FlatButton.icon(
               icon: Icon(Icons.add),
-              label: Text('Novo item da lista'),
+              label: Text(localization.featureTodoEnable),
               onPressed: () {
-                noteEntity.update<Todo>((old) => old..value.add(ListItem('')));
+                if (noteEntity.hasT<Todo>())
+                  noteEntity
+                      .update<Todo>((old) => old..value.add(ListItem('')));
+                else
+                  noteEntity.set(Todo(value: [ListItem('')]));
               },
             )
           ]),
     );
   }
 
-  Widget buildTagsField(Entity noteEntity) {
-    final tags = noteEntity.get<Tags>()?.value;
-
-    if (tags == null)
-      return FlatButton.icon(
-        icon: Icon(Icons.add),
-        label: Text('Adicionar tag'),
-        onPressed: () {
-          noteEntity.set(Tags(const ['']));
-        },
-      );
+  Widget buildTagsField(Entity noteEntity, Localization localization) {
+    final tags = noteEntity.get<Tags>()?.value ?? [];
 
     return Padding(
         padding: const EdgeInsets.only(top: 8, bottom: 16),
@@ -277,32 +272,41 @@ class _NoteFormFeatureState extends State<NoteFormFeature>
                 leading: IconButton(
                   icon: Icon(Icons.delete),
                   onPressed: () {
-                    noteEntity.update<Tags>((old) => old..value.removeAt(i));
+                    noteEntity
+                      ..update<Tags>((old) => old..value.removeAt(i))
+                      ..set(Changed());
                   },
                 ),
                 title: TextFormField(
                   initialValue: tags[i],
                   decoration: InputDecoration(
-                    hintText: 'Nome da tag',
-                    labelText: 'Tag',
+                    hintText: localization.featureTagItemLabel,
+                    labelText: localization.featureTagsLabel,
                   ),
-                  onSaved: (tag) =>
-                      noteEntity.update<Tags>((old) => old..value[i] = tag),
+                  onChanged: (_) => noteEntity.set(Changed()),
+                  onSaved: (tag) {
+                    return noteEntity
+                      ..update<Tags>((old) => old..value[i] = tag)
+                      ..set(Changed());
+                  },
                   textAlign: TextAlign.left,
                 ),
               ),
             FlatButton.icon(
               icon: Icon(Icons.add),
-              label: Text('Nova tag'),
+              label: Text(localization.featureTagsEnable),
               onPressed: () {
-                noteEntity.update<Tags>((old) => old..value.add(''));
+                if (noteEntity.hasT<Tags>())
+                  noteEntity.update<Tags>((old) => Tags(old.value..add('')));
+                else
+                  noteEntity.set(Tags(const ['']));
               },
             )
           ],
         ));
   }
 
-  Widget buildPicField(Entity noteEntity) {
+  Widget buildPicField(Entity noteEntity, Localization localization) {
     final picFile = noteEntity.get<Picture>()?.value;
 
     if (picFile == null)
@@ -320,7 +324,7 @@ class _NoteFormFeatureState extends State<NoteFormFeature>
                 final timestamp =
                     DateTime.now().millisecondsSinceEpoch.toString();
                 final path = (await getExternalStorageDirectory()).path;
-                final newPath = '$path/Pictures/$timestamp.jpeg';
+                final newPath = '$path/Media/$timestamp.jpeg';
                 image
                   ..copySync(newPath)
                   ..deleteSync();
@@ -341,9 +345,10 @@ class _NoteFormFeatureState extends State<NoteFormFeature>
               final timestamp =
                   DateTime.now().millisecondsSinceEpoch.toString();
               final path = (await getExternalStorageDirectory()).path;
-              final newPath = '$path/Pictures/$timestamp.jpeg';
-              image..copySync(newPath)
-              ..deleteSync();
+              final newPath = '$path/Media/$timestamp.jpeg';
+              image
+                ..copySync(newPath)
+                ..deleteSync();
               em.getUniqueEntity<FeatureEntityTag>().set(Picture(newPath));
             },
           )
@@ -352,7 +357,8 @@ class _NoteFormFeatureState extends State<NoteFormFeature>
 
     return Padding(
       padding: const EdgeInsets.only(top: 4, bottom: 8),
-      child: Image.file(picFile, fit: BoxFit.fill),
+      child:
+          Hero(tag: picFile.path, child: Image.file(picFile, fit: BoxFit.fill)),
     );
   }
 }

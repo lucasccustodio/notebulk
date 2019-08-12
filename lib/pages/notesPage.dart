@@ -11,87 +11,70 @@ class NotesPage extends StatelessWidget {
   const NotesPage({Key key, this.entityManager}) : super(key: key);
 
   final EntityManager entityManager;
-  final String emptyMessage = 'Você ainda não possui nenhuma anotação...';
-
-  Widget buildFAB({bool darkMode = true}) {
-    return AnimatableEntityObservingWidget(
-        startAnimating: false,
-        duration: Duration(milliseconds: 150),
-        provider: (em) => em.getUniqueEntity<FABTag>(),
-        tweens: {
-          'iconColor': ColorTween(
-              begin: darkMode ? Colors.white : Colors.black, end: Colors.red),
-          'iconOpacity': Tween<double>(begin: 0.0, end: 1.0)
-        },
-        animateAdded: (c) =>
-            c is Toggle ? EntityAnimation.forward : EntityAnimation.none,
-        animateRemoved: (c) =>
-            c is Toggle ? EntityAnimation.reverse : EntityAnimation.none,
-        animateUpdated: (oldC, newC) => EntityAnimation.none,
-        builder: (fabEntity, animations, __) {
-          return FABMenu(
-            animateIcon: animations['iconOpacity'],
-            toggleButtonColor: animations['iconColor'],
-            onToggle: () {
-              if (fabEntity.hasT<Toggle>())
-                fabEntity.remove<Toggle>();
-              else
-                fabEntity.set(Toggle());
-            },
-            onPressed: (index) {
-              final routes = [
-                Routes.createNote,
-                Routes.createNote,
-                Routes.createNote
-              ];
-
-              entityManager.setUnique(NavigationEvent.push(routes[index]));
-
-              fabEntity.set(Toggle());
-            },
-          );
-        });
-  }
 
   @override
   Widget build(BuildContext context) {
-    final darkMode = Theme.of(context).brightness == Brightness.dark;
+    final localization =
+        entityManager.getUniqueEntity<AppSettingsTag>().get<Localization>();
 
-    return Stack(
-      children: <Widget>[
-        Padding(
-            padding: EdgeInsets.symmetric(vertical: 4, horizontal: 8),
-            child: GroupObservingWidget(
-                matcher: Matchers.note,
-                builder: (group, context) {
-                  final notesList = group.entities;
+    return GroupObservingWidget(
+        matcher: Matchers.note,
+        builder: (group, context) {
+          final notesList = group.entities;
+          final notesByDate = <DateTime, List<Entity>>{};
+          for (final note in notesList) {
+            final date = note.get<Timestamp>().value;
+            final simplifiedDate = DateTime.utc(date.year, date.month);
+            if (notesByDate[simplifiedDate] == null) {
+              notesByDate[simplifiedDate] = [];
+            }
+            notesByDate[simplifiedDate].add(note);
+          }
 
-                  return buildNotesGridView(notesList, buildNoteCard,
-                      'Você ainda não possui anotações...', [
-                    ListItem('Criar uma anotação'),
-                    ListItem('Encarar esse vazio...')
-                  ]);
-                })),
-        AnimatableEntityObservingWidget(
-          provider: (em) => em.getUniqueEntity<DisplayStatusTag>(),
-          startAnimating: false,
-          curve: Curves.decelerate,
-          tweens: {
-            'size': Tween<double>(begin: 0.0, end: kBottomNavigationBarHeight)
-          },
-          animateAdded: (c) =>
-              c is Toggle ? EntityAnimation.forward : EntityAnimation.none,
-          animateRemoved: (c) =>
-              c is Toggle ? EntityAnimation.reverse : EntityAnimation.none,
-          animateUpdated: (_, __) => EntityAnimation.none,
-          builder: (statusEntity, animations, context) => Positioned(
-            bottom: 8 + (animations['size'].value),
-            right: 8,
-            child: buildFAB(darkMode: darkMode),
-          ),
-        ),
-      ],
-    );
+          if (notesByDate.isEmpty) {
+            notesByDate[DateTime.now()] = [];
+          }
+
+          return CustomScrollView(
+            primary: true,
+            slivers: <Widget>[
+              for (final noteGroup in notesByDate.entries) ...[
+                SliverToBoxAdapter(
+                    child: noteGroup.value.isNotEmpty
+                        ? CheckboxListTile(
+                            controlAffinity: ListTileControlAffinity.leading,
+                            title: Text(formatTimestamp(
+                                noteGroup.key, localization,
+                                includeDay: false, includeWeekDay: false)),
+                            value: noteGroup.value
+                                    .where((e) => e.hasT<Selected>())
+                                    .length ==
+                                noteGroup.value.length,
+                            onChanged: (value) {
+                              if (value) {
+                                for (final note in noteGroup.value)
+                                  note.set(Selected());
+                              } else {
+                                for (final note in noteGroup.value)
+                                  note.remove<Selected>();
+                              }
+                            },
+                          )
+                        : ListTile(
+                            title: Text(formatTimestamp(
+                                noteGroup.key, localization,
+                                includeDay: false, includeWeekDay: false)),
+                          )),
+                buildNotesSliverGridView(
+                    noteGroup.value,
+                    buildNoteCard,
+                    localization.emptyNoteHint,
+                    localization.emptyNoteTodo,
+                    localization.defaultHelpTags)
+              ]
+            ],
+          );
+        });
   }
 
   Widget buildNoteCard(Entity note) {

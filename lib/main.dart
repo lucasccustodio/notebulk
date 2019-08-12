@@ -1,7 +1,8 @@
 import 'package:entitas_ff/entitas_ff.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/rendering.dart' show debugPaintSizeEnabled;
+import 'package:flutter/services.dart';
 import 'package:notebulk/ecs/components.dart';
+import 'package:flutter/rendering.dart';
 import 'package:notebulk/ecs/systems.dart';
 import 'package:notebulk/mainApp.dart';
 import 'package:notebulk/features/noteFormFeature.dart';
@@ -10,16 +11,25 @@ import 'package:notebulk/pages/storageErrorPage.dart';
 import 'package:notebulk/util.dart';
 import 'package:notebulk/widgets/util.dart';
 import 'package:tinycolor/tinycolor.dart';
+import 'package:flutter_localizations/flutter_localizations.dart';
+
+import 'features/testFeature.dart';
 
 void main() async {
+  //debugDefaultTargetPlatformOverride = TargetPlatform.fuchsia;
+  //debugPaintSizeEnabled = true;
+
   final mainEntityManager = EntityManager();
 
   mainEntityManager.setUnique(SplashScreenTag()).set(Counter(0));
-  mainEntityManager.setUnique(UserSettingsTag())
+  mainEntityManager.setUnique(AppSettingsTag())
     ..set(ThemeColor(Colors.black))
-    ..set(DarkMode(value: true));
+    ..set(DarkMode(value: true))
+    ..set(Localization.en());
+  mainEntityManager.setUnique(PageNavigationTag())
+    ..set(CurrentIndex(0))
+    ..set(NextIndex(1));
   mainEntityManager
-    ..setUnique(PageIndex(0))
     ..setUnique(DisplayStatusTag())
     ..setUnique(FABTag())
     ..setUnique(StoragePermission(value: false))
@@ -27,12 +37,10 @@ void main() async {
 
   final navigatorKey = GlobalKey<NavigatorState>();
 
-  debugPaintSizeEnabled = false;
-
   runApp(EntityManagerProvider(
     entityManager: mainEntityManager,
     child: EntityObservingWidget(
-      provider: (em) => em.getUniqueEntity<UserSettingsTag>(),
+      provider: (em) => em.getUniqueEntity<AppSettingsTag>(),
       builder: (themeEntity, context) {
         final darkMode = themeEntity.get<DarkMode>().value;
         final primaryColor = themeEntity.get<ThemeColor>().value;
@@ -44,11 +52,30 @@ void main() async {
           darkMode: darkMode,
           themeColor: accentColor,
           child: MaterialApp(
+            debugShowCheckedModeBanner: false,
+            debugShowMaterialGrid: false,
             navigatorKey: navigatorKey,
             title: 'Notebulk',
             initialRoute: Routes.splashScreen,
+            supportedLocales: const [Locale('en', 'US'), Locale('pt', 'BR')],
+            localeResolutionCallback: (locale, _) {
+              if (locale != null) {
+                mainEntityManager.getUniqueEntity<AppSettingsTag>().set(
+                    locale.languageCode == 'en'
+                        ? Localization.en()
+                        : Localization.ptBR());
+              }
+              return locale;
+            },
+            localizationsDelegates: [
+              GlobalMaterialLocalizations.delegate,
+              GlobalWidgetsLocalizations.delegate,
+            ],
             onGenerateRoute: (settings) {
               Widget pageWidget;
+              final localization = mainEntityManager
+                  .getUniqueEntity<AppSettingsTag>()
+                  .get<Localization>();
 
               switch (settings.name) {
                 case Routes.splashScreen:
@@ -59,21 +86,24 @@ void main() async {
                     entityManager: mainEntityManager,
                   );
                   break;
+                case Routes.createList:
                 case Routes.createNote:
                   pageWidget = EntityManagerProvider.feature(
                     child: NoteFormFeature(
-                      title: 'Criar nota',
+                      title: localization.createNoteFeatureTitle,
                     ),
                     system: FeatureSystem(
                       rootEntityManager: mainEntityManager,
-                      onCreate: (em, _) {
+                      onCreate: (em, root) {
                         em.setUnique(FeatureEntityTag());
+                        em.setUnique(AppSettingsTag()).set(root
+                            .getUniqueEntity<AppSettingsTag>()
+                            .get<Localization>());
                       },
                       onDestroy: (em, root) {
-                        final hasData = em.getUnique<HasDataTag>();
                         final note = em.getUniqueEntity<FeatureEntityTag>();
 
-                        if (hasData != null)
+                        if (note.hasT<PersistMe>())
                           root.createEntity()
                             ..set(note.get<Contents>())
                             ..set(note.get<Tags>())
@@ -87,13 +117,17 @@ void main() async {
                 case Routes.editNote:
                   pageWidget = EntityManagerProvider.feature(
                     child: NoteFormFeature(
-                      title: 'Editar nota',
+                      title: localization.editNoteFeatureTitle,
                     ),
                     system: FeatureSystem(
                       rootEntityManager: mainEntityManager,
                       onCreate: (em, root) {
                         final editNote =
                             root.getUniqueEntity<FeatureEntityTag>();
+
+                        em.setUnique(AppSettingsTag()).set(root
+                            .getUniqueEntity<AppSettingsTag>()
+                            .get<Localization>());
 
                         em.setUnique(FeatureEntityTag())
                           ..set(editNote.get<Contents>())
@@ -105,10 +139,9 @@ void main() async {
                         root.removeUnique<FeatureEntityTag>();
                       },
                       onDestroy: (em, root) {
-                        final hasData = em.getUnique<HasDataTag>();
                         final note = em.getUniqueEntity<FeatureEntityTag>();
 
-                        if (hasData != null)
+                        if (note.hasT<PersistMe>())
                           root.createEntity()
                             ..set(note.get<Contents>())
                             ..set(note.get<Tags>())
@@ -125,21 +158,32 @@ void main() async {
                     entityManager: mainEntityManager,
                   );
                   break;
+                case Routes.testPage:
+                  pageWidget = EntityManagerProvider.feature(
+                    system: FeatureSystem(
+                      rootEntityManager: mainEntityManager,
+                    ),
+                    child: TestFeature(),
+                  );
+                  break;
                 default:
                   pageWidget = Container();
               }
               return FadeRoute(page: pageWidget);
             },
             theme: ThemeData(
-                fontFamily: 'Ubuntu',
+                fontFamily: 'OpenSans',
                 brightness: darkMode ? Brightness.dark : Brightness.light,
                 primaryColor: primaryColor,
                 accentColor: accentColor,
                 toggleableActiveColor: accentColor,
                 textSelectionColor: accentColor,
                 textSelectionHandleColor: accentColor,
-                appBarTheme: AppBarTheme.of(context)
-                    .copyWith(color: Colors.transparent, elevation: 0),
+                appBarTheme: AppBarTheme.of(context).copyWith(
+                    color: Colors.transparent,
+                    elevation: 0,
+                    iconTheme: IconTheme.of(context).copyWith(
+                        color: darkMode ? Colors.white : Colors.black)),
                 canvasColor: Colors.transparent,
                 backgroundColor: Colors.transparent,
                 scaffoldBackgroundColor: Colors.transparent,
@@ -158,6 +202,8 @@ void main() async {
       LoadUserSettingsSystem(),
       PersistUserSettingsSystem(),
       TickSystem(),
+      ImportNotesSystem(),
+      ExportNotesSystem(),
       LoadNotesSystem(),
       PersistNoteSystem(),
       UpdateNoteSystem(),

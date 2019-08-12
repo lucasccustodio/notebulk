@@ -5,10 +5,10 @@ import 'package:flutter/material.dart';
 import 'package:notebulk/ecs/components.dart';
 import 'package:notebulk/ecs/matchers.dart';
 import 'package:notebulk/util.dart';
-import 'package:path_provider/path_provider.dart' as path;
+import 'package:path_provider/path_provider.dart';
+import 'package:permission/permission.dart';
 import 'package:sembast/sembast.dart';
 import 'package:sembast/sembast_io.dart';
-import 'package:permission/permission.dart';
 
 class TickSystem extends EntityManagerSystem
     implements InitSystem, ExecuteSystem {
@@ -112,10 +112,15 @@ class DisplaySelectedSystem extends TriggeredSystem {
   @override
   void executeOnChange() {
     final selected = entityManager.group(all: [Selected]);
+    final label = entityManager
+        .getUniqueEntity<AppSettingsTag>()
+        .get<Localization>()
+        .selectedLabel;
+
     if (!selected.isEmpty) {
       entityManager
           .getUniqueEntity<DisplayStatusTag>()
-          .set(Contents('${selected.entities.length} selecionada(s)'));
+          .set(Contents('${selected.entities.length} $label'));
       entityManager.getUniqueEntity<DisplayStatusTag>().set(Toggle());
     } else {
       entityManager.getUniqueEntity<DisplayStatusTag>()
@@ -141,7 +146,7 @@ class ClearSelectedSystem extends TriggeredSystem {
   @override
   EntityMatcher get matcher => EntityMatcher(any: [
         NavigationEvent,
-        PageIndex,
+        PageNavigationTag,
         DeleteNotesEvent,
         ArchiveNotesEvent,
         RestoreNotesEvent
@@ -169,7 +174,7 @@ class LoadUserSettingsSystem extends TriggeredSystem {
     final darkMode = await settingsStore.record('darkMode').get(dbClient) ??
         _defaultDarkMode;
 
-    entityManager.getUniqueEntity<UserSettingsTag>()
+    entityManager.getUniqueEntity<AppSettingsTag>()
       ..set(ThemeColor(themeColor))
       ..set(DarkMode(value: darkMode));
 
@@ -198,7 +203,7 @@ class PersistUserSettingsSystem extends TriggeredSystem implements ExitSystem {
   }
 
   void persistUserSettings() {
-    final userSettings = entityManager.getUniqueEntity<UserSettingsTag>();
+    final userSettings = entityManager.getUniqueEntity<AppSettingsTag>();
 
     if (userSettings == null) {
       return;
@@ -223,20 +228,22 @@ class PersistUserSettingsSystem extends TriggeredSystem implements ExitSystem {
   EntityMatcher get matcher => Matchers.settings.extend(any: [DatabaseService]);
 }
 
-class DatabaseSystem extends EntityManagerSystem implements InitSystem {
+class DatabaseSystem extends TriggeredSystem implements InitSystem {
   @override
-  void init() async {
+  void init() => setupDatabase();
+
+  void setupDatabase() async {
     final status =
         await Permission.getPermissionsStatus([PermissionName.Storage]);
 
     if (status.first.permissionStatus == PermissionStatus.deny ||
-        status.first.permissionStatus == PermissionStatus.notAgain) {
+        status.first.permissionStatus == PermissionStatus.notDecided) {
       entityManager.setUnique(NavigationEvent.replace(Routes.errorPage));
       return;
     }
 
-    final docPath = (await path.getExternalStorageDirectory()).path;
-    final db = await databaseFactoryIo.openDatabase('$docPath/notes.db');
+    final path = (await getExternalStorageDirectory()).path;
+    final db = await databaseFactoryIo.openDatabase('$path/notes.db');
 
     entityManager.setUnique(DatabaseService(db));
     entityManager
@@ -244,6 +251,125 @@ class DatabaseSystem extends EntityManagerSystem implements InitSystem {
         .update<Counter>((old) => Counter(old.value + 25));
     entityManager.setUnique(LoadUserSettingsEvent());
   }
+
+  @override
+  GroupChangeEvent get event => GroupChangeEvent.addedOrUpdated;
+
+  @override
+  void executeOnChange() => setupDatabase();
+
+  @override
+  EntityMatcher get matcher => EntityMatcher(all: [SetupDatabaseEvent]);
+}
+
+class ExportNotesSystem extends TriggeredSystem {
+  @override
+  GroupChangeEvent get event => GroupChangeEvent.addedOrUpdated;
+
+  @override
+  void executeOnChange() async {
+    final path = (await getExternalStorageDirectory()).path;
+    final dbFile = File('$path/notes.db');
+    final localization =
+        entityManager.getUniqueEntity<AppSettingsTag>().get<Localization>();
+
+    if (dbFile.existsSync()) {
+      const newPath = '/storage/emulated/0/notesBkp.db';
+      try {
+        dbFile.copySync(newPath);
+        entityManager.getUniqueEntity<DisplayStatusTag>()
+          ..set(Contents(localization.exportMessage))
+          ..set(Toggle());
+      } on FileSystemException catch (e) {
+        print(e);
+      }
+    }
+  }
+
+  @override
+  EntityMatcher get matcher => EntityMatcher(all: [ExportNotesEvent]);
+}
+
+class ImportNotesSystem extends TriggeredSystem {
+  @override
+  GroupChangeEvent get event => GroupChangeEvent.addedOrUpdated;
+
+  @override
+  void executeOnChange() async {
+    const path = '/storage/emulated/0';
+    const dbBkpPath = '$path/notesBkp.db';
+    final bkpEntityManager = EntityManager();
+    final localization =
+        entityManager.getUniqueEntity<AppSettingsTag>().get<Localization>();
+
+    if (File(dbBkpPath).existsSync()) {
+      try {
+        final dbBkp = await databaseFactoryIo.openDatabase(dbBkpPath);
+        final bkpNoteStore = intMapStoreFactory.store('notes');
+
+        final snapshots = await bkpNoteStore.query().getSnapshots(dbBkp);
+
+        entityManager.getUniqueEntity<DisplayStatusTag>()
+          ..set(Contents(localization.importingAlert))
+          ..set(Toggle());
+
+        for (var snapshot in snapshots
+          ..sort((s1, s2) {
+            final date1 = DateTime.parse(s1.value['timestamp']);
+            final date2 = DateTime.parse(s2.value['timestamp']);
+
+            return date1.compareTo(date2);
+          })) {
+          final snapshotData = snapshot.value;
+
+          final noteEntity = bkpEntityManager.createEntity()
+            ..set(Contents(snapshotData['contents']))
+            ..set(Timestamp(snapshotData['timestamp']))
+            ..set(DatabaseKey(snapshot.key));
+
+          if (snapshotData['tags'] != null) {
+            final tags = snapshotData['tags'].cast<String>();
+            noteEntity.set(Tags(
+                tags.where((tag) => tag is String && tag.isNotEmpty).toList()));
+          }
+
+          if (snapshot['isList'] == true) {
+            final List<Map<String, dynamic>> data =
+                snapshot['listItems'].cast<Map<String, dynamic>>();
+            noteEntity.set(Todo(
+                value: data.map((json) => ListItem.fromJson(json)).toList()));
+          }
+
+          if (snapshot['picFile'] != null) {
+            if (File(snapshot['picFile']).existsSync())
+              noteEntity.set(Picture(snapshot['picFile']));
+          }
+
+          if (snapshot['archived'] == true) {
+            noteEntity.set(Archived());
+          }
+        }
+
+        await dbBkp.close();
+      } on FileSystemException catch (e) {
+        print(e);
+      } finally {
+        for (final note in bkpEntityManager.entities) {
+          entityManager.createEntity()
+            ..set(note.get<Contents>())
+            ..set(note.get<Timestamp>())
+            ..set(note.get<Todo>())
+            ..set(note.get<Tags>())
+            ..set(note.get<Picture>())
+            ..set(note.get<DatabaseKey>())
+            ..set(PersistMe());
+        }
+      }
+    }
+  }
+
+  @override
+  EntityMatcher get matcher => EntityMatcher(all: [ImportNotesEvent]);
 }
 
 class LoadNotesSystem extends TriggeredSystem {
@@ -253,6 +379,7 @@ class LoadNotesSystem extends TriggeredSystem {
   @override
   void executeOnChange() async {
     final dbClient = entityManager.getUnique<DatabaseService>()?.value;
+
     if (dbClient == null) {
       return;
     }
@@ -268,7 +395,13 @@ class LoadNotesSystem extends TriggeredSystem {
     final endCount = snapshots.length;
     var count = 0;
 
-    for (var snapshot in snapshots) {
+    for (var snapshot in snapshots
+      ..sort((s1, s2) {
+        final date1 = DateTime.parse(s1.value['timestamp']);
+        final date2 = DateTime.parse(s2.value['timestamp']);
+
+        return date2.compareTo(date1);
+      })) {
       final snapshotData = snapshot.value;
 
       //Create a new Note entity using the loaded data.
@@ -277,18 +410,18 @@ class LoadNotesSystem extends TriggeredSystem {
         ..set(Timestamp(snapshotData['timestamp']))
         ..set(DatabaseKey(snapshot.key));
 
-      //Tags are optional so only include the component if there's any.
-      if (snapshotData['tags'] != null) {
-        final tags = snapshotData['tags'].cast<String>();
-        noteEntity.set(Tags(
-            tags.where((tag) => tag is String && tag.isNotEmpty).toList()));
+      final List<String> tags = snapshotData['tags'].cast<String>();
+
+      if (tags.isNotEmpty) {
+        noteEntity.set(Tags(tags.toList()));
       }
 
-      if (snapshot['isList'] == true) {
-        final List<Map<String, dynamic>> data =
-            snapshot['listItems'].cast<Map<String, dynamic>>();
+      final List<Map<String, dynamic>> todo =
+          snapshot['todo']?.cast<Map<String, dynamic>>();
+
+      if (todo.isNotEmpty) {
         noteEntity.set(
-            Todo(value: data.map((json) => ListItem.fromJson(json)).toList()));
+            Todo(value: todo.map((json) => ListItem.fromJson(json)).toList()));
       }
 
       if (snapshot['picFile'] != null)
@@ -333,13 +466,13 @@ class PersistNoteSystem extends ReactiveSystem {
 
       final data = {
         'contents': contents,
-        'tags': tags,
+        'tags': tags.where((value) => value.isNotEmpty).toList(),
+        'todo': items
+            .where((item) => item.label.isNotEmpty)
+            .map((item) => item.toJson())
+            .toList(),
         'timestamp': DateTime.now().toIso8601String()
       };
-      if (items.isNotEmpty) {
-        data['isList'] = true;
-        data['listItems'] = items.map((item) => item.toJson()).toList();
-      }
       if (picFile != null) {
         data['picFile'] = picFile.path;
       }
@@ -373,13 +506,14 @@ class UpdateNoteSystem extends ReactiveSystem {
 
       final data = {
         'contents': contents,
-        'tags': tags,
+        'tags': tags.where((value) => value.isNotEmpty).toList(),
+        'todo': items
+            .where((item) => item.label.isNotEmpty)
+            .map((item) => item.toJson())
+            .toList(),
         'timestamp': DateTime.now().toIso8601String()
       };
-      if (items.isNotEmpty) {
-        data['isList'] = true;
-        data['listItems'] = items.map((item) => item.toJson()).toList();
-      }
+
       if (picFile != null) {
         data['picFile'] = picFile.path;
       }
