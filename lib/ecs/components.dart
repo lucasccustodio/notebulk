@@ -2,7 +2,7 @@ import 'dart:io';
 
 import 'package:entitas_ff/entitas_ff.dart';
 import 'package:flutter/material.dart';
-import 'package:sembast/sembast.dart';
+import 'package:notebulk/theme.dart';
 
 class SetupLocalizationEvent extends UniqueComponent {
   SetupLocalizationEvent(this.context);
@@ -11,12 +11,6 @@ class SetupLocalizationEvent extends UniqueComponent {
 }
 
 class SetupDatabaseEvent extends UniqueComponent {}
-
-class DatabaseService extends UniqueComponent {
-  DatabaseService(this.value);
-
-  final Database value;
-}
 
 class DatabaseKey extends Component {
   DatabaseKey(this.value);
@@ -43,6 +37,14 @@ class Contents extends Component {
   final String value;
 }
 
+enum ReminderPriority { none, low, medium, high, maximum }
+
+class Priority extends Component {
+  final ReminderPriority value;
+
+  Priority(this.value);
+}
+
 class Tags extends Component {
   Tags(this.value);
 
@@ -57,23 +59,33 @@ class Todo extends Component {
   final List<ListItem> value;
 }
 
+class TagData extends Component {
+  final String value;
+  final Color color;
+
+  TagData(this.value, [this.color]);
+}
+
 class ListItem {
-  ListItem(this.label, {this.isChecked = false});
+  ListItem(this.label, {this.isChecked = false, this.isNumbered = false});
 
   ListItem.fromJson(Map<String, dynamic> map)
-      : label = map['label'],
-        isChecked = map['isChecked'];
+      : label = map['label'] ?? '',
+        isNumbered = map['isNumbered'] ?? false,
+        isChecked = map['isChecked'] ?? false;
 
   bool isChecked;
+  bool isNumbered;
   String label;
 
-  Map<String, dynamic> toJson() => {'label': label, 'isChecked': isChecked};
+  Map<String, dynamic> toJson() =>
+      {'label': label, 'isChecked': isChecked, 'isNumbered': isNumbered};
 
   @override
-  String toString() => 'label: $label, isChecked: $isChecked';
+  String toString() => toJson().toString();
 
   @override
-  int get hashCode => label.hashCode ^ isChecked.hashCode;
+  int get hashCode => label.hashCode ^ isChecked.hashCode ^ isNumbered.hashCode;
 
   @override
   bool operator ==(dynamic other) =>
@@ -102,33 +114,26 @@ class NavigationEvent extends UniqueComponent {
   final NavigationOps routeOp;
 }
 
-class PageNavigationTag extends UniqueComponent {}
-
-class CurrentIndex extends Component {
-  CurrentIndex([this.value = 0]);
+class PageIndex extends UniqueComponent {
+  PageIndex(this.value, {this.oldValue});
 
   final int value;
-}
-
-class NextIndex extends Component {
-  NextIndex(this.value);
-
-  final int value;
+  final int oldValue;
 }
 
 class StoragePermission extends UniqueComponent {
-  StoragePermission({this.value = true});
-
-  final bool value;
+  StoragePermission();
 }
 
 class Ready extends Component {}
 
+class PersistUserSettingsEvent extends UniqueComponent {}
+
 class LoadUserSettingsEvent extends UniqueComponent {}
 
-class RefreshNotesEvent extends UniqueComponent {}
+class RefreshDatabaseEvent extends UniqueComponent {}
 
-class DeleteNotesEvent extends UniqueComponent {}
+class DiscardSelectedEvent extends UniqueComponent {}
 
 class ArchiveNotesEvent extends UniqueComponent {}
 
@@ -138,17 +143,21 @@ class ExportNotesEvent extends UniqueComponent {}
 
 class ImportNotesEvent extends UniqueComponent {}
 
+class CompleteRemindersEvent extends UniqueComponent {}
+
 class FeatureEntityTag extends UniqueComponent {}
+
+class WaitForUser extends Component {}
 
 class Changed extends Component {}
 
-class PersistMe extends Component {}
+class PersistMe extends Component {
+  final int key;
 
-class UpdateMe extends Component {}
+  PersistMe([this.key]);
+}
 
 class DisplayStatusTag extends UniqueComponent {}
-
-class SplashScreenTag extends UniqueComponent {}
 
 class Selected extends Component {}
 
@@ -168,16 +177,10 @@ class Counter extends Component {
   final int value;
 }
 
-class ThemeColor extends Component {
-  ThemeColor(this.value);
+class AppTheme extends Component {
+  final BaseTheme value;
 
-  final Color value;
-}
-
-class DarkMode extends Component {
-  DarkMode({this.value = true});
-
-  final bool value;
+  AppTheme(this.value);
 }
 
 class Toggle extends Component {}
@@ -195,3 +198,15 @@ class Tick extends Component {
 class SearchBarTag extends UniqueComponent {}
 
 class AppSettingsTag extends UniqueComponent {}
+
+class GridCount extends Component {
+  GridCount([this.value = 2]);
+
+  final int value;
+}
+
+class ChangeLocaleEvent extends UniqueComponent {
+  final String localeCode;
+
+  ChangeLocaleEvent(this.localeCode);
+}

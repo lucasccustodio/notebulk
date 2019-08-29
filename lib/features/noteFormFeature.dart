@@ -1,8 +1,14 @@
+import 'dart:io';
+
 import 'package:entitas_ff/entitas_ff.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:kt_dart/kt.dart';
 import 'package:notebulk/ecs/components.dart';
+import 'package:notebulk/theme.dart';
 import 'package:notebulk/util.dart';
+import 'package:notebulk/widgets/util.dart';
 import 'package:path_provider/path_provider.dart';
 
 class NoteFormFeature extends StatefulWidget {
@@ -22,6 +28,8 @@ class _NoteFormFeatureState extends State<NoteFormFeature> {
     final entityManager = EntityManagerProvider.of(context).entityManager;
     final localization =
         entityManager.getUniqueEntity<AppSettingsTag>().get<Localization>();
+    final appTheme =
+        entityManager.getUniqueEntity<AppSettingsTag>().get<AppTheme>().value;
 
     void closeFeature() {
       Navigator.of(context).pop(true);
@@ -40,26 +48,18 @@ class _NoteFormFeatureState extends State<NoteFormFeature> {
         } else {
           return showDialog(
               context: context,
-              builder: (context) => AlertDialog(
-                    title: Text(
-                      'Você fez alterações que ainda não foram salvas. Sair mesmo assim?',
-                    ),
-                    actions: <Widget>[
-                      FlatButton(
-                        child: Text('Não'),
-                        onPressed: closeDialog,
-                      ),
-                      FlatButton(
-                        child: Text('Sim'),
-                        onPressed: () {
-                          entityManager
-                              .getUniqueEntity<FeatureEntityTag>()
-                              .remove<PersistMe>();
-                          closeFeature();
-                        },
-                      ),
-                    ],
-                  ));
+              builder: (context) => ShouldLeavePromptDialog(
+                  appTheme: appTheme,
+                  noLabel: localization.no,
+                  yesLabel: localization.yes,
+                  message: localization.promptLeaveUnsaved,
+                  onYes: () {
+                    entityManager
+                        .getUniqueEntity<FeatureEntityTag>()
+                        .remove<PersistMe>();
+                    closeFeature();
+                  },
+                  onNo: closeDialog));
         }
       },
       child: Scaffold(
@@ -70,62 +70,74 @@ class _NoteFormFeatureState extends State<NoteFormFeature> {
             top: false,
             bottom: true,
             maintainBottomViewPadding: false,
-            child: CustomScrollView(
-              slivers: <Widget>[
-                SliverAppBar(
-                  floating: true,
-                  pinned: true,
-                  leading: BackButton(),
-                  backgroundColor:
-                      Theme.of(context).accentColor.withOpacity(0.5),
-                  actions: <Widget>[
-                    EntityObservingWidget(
-                      provider: (em) => em.getUniqueEntity<FeatureEntityTag>(),
-                      builder: (noteEntity, context) => FlatButton(
-                        child: Text(localization.saveChangesFeatureLabel),
-                        onPressed: noteEntity.hasT<Changed>()
-                            ? () {
-                                if (key.currentState.validate())
-                                  key.currentState.save();
-                                else
-                                  return;
-
-                                entityManager
-                                    .getUniqueEntity<FeatureEntityTag>()
-                                    .set(PersistMe());
-
-                                closeFeature();
-                              }
-                            : null,
+            child: Theme(
+              data: ThemeData(accentColor: appTheme.primaryColor),
+              child: CustomScrollView(
+                slivers: <Widget>[
+                  SliverAppBar(
+                    floating: true,
+                    pinned: true,
+                    leading: IconButton(
+                      icon: Icon(
+                        AppIcons.left,
+                        color: appTheme.baseStyle.color,
                       ),
+                      onPressed: () {
+                        Navigator.of(context).pop();
+                      },
                     ),
-                  ],
-                  title: Padding(
-                    padding: const EdgeInsets.only(left: 16),
-                    child: EntityObservingWidget(
+                    backgroundColor: appTheme.appBarColor,
+                    actions: <Widget>[
+                      EntityObservingWidget(
+                        provider: (em) =>
+                            em.getUniqueEntity<FeatureEntityTag>(),
+                        blacklist: const [Contents, Tags, Todo],
+                        builder: (noteEntity, context) => FlatButton(
+                          child: Text(
+                            localization.saveChangesFeatureLabel,
+                            style: Theme.of(context).textTheme.title.copyWith(
+                                color: noteEntity.hasT<Changed>()
+                                    ? appTheme.primaryButtonColor
+                                    : BaseTheme.lightGrey),
+                          ),
+                          onPressed: noteEntity.hasT<Changed>()
+                              ? () {
+                                  if (key.currentState.validate())
+                                    key.currentState.save();
+                                  else
+                                    return;
+
+                                  entityManager
+                                      .getUniqueEntity<FeatureEntityTag>()
+                                      .set(PersistMe());
+
+                                  closeFeature();
+                                }
+                              : null,
+                        ),
+                      ),
+                    ],
+                    title: EntityObservingWidget(
                       provider: (em) => em.getUniqueEntity<FeatureEntityTag>(),
                       builder: (noteEntity, context) => Text(
                         "${widget.title}${noteEntity.hasT<Changed>() ? '*' : ''}",
-                        style: Theme.of(context)
-                            .textTheme
-                            .headline
-                            .copyWith(fontWeight: FontWeight.w400),
+                        style: appTheme.appTitleTextStyle
+                            .copyWith(fontFamily: 'Palanquin'),
                       ),
                     ),
                   ),
-                ),
-                SliverPadding(
-                    padding: const EdgeInsets.only(
-                        left: 16, right: 16, top: 4, bottom: 4),
-                    sliver: SliverToBoxAdapter(
-                      child: EntityObservingWidget(
-                        provider: (em) =>
-                            em.getUniqueEntity<FeatureEntityTag>(),
-                        builder: (noteEntity, context) =>
-                            buildNoteCard(noteEntity, localization),
-                      ),
-                    )),
-              ],
+                  SliverPadding(
+                      padding: const EdgeInsets.all(16),
+                      sliver: SliverToBoxAdapter(
+                        child: EntityObservingWidget(
+                          provider: (em) =>
+                              em.getUniqueEntity<FeatureEntityTag>(),
+                          builder: (noteEntity, context) =>
+                              buildNoteCard(noteEntity, localization, appTheme),
+                        ),
+                      )),
+                ],
+              ),
             ),
           ),
         ),
@@ -133,232 +145,301 @@ class _NoteFormFeatureState extends State<NoteFormFeature> {
     );
   }
 
-  Card buildNoteCard(Entity noteEntity, Localization localization) {
+  Widget buildTagsField(
+      Entity noteEntity, Localization localization, BaseTheme appTheme) {
+    return TextFormField(
+      initialValue: noteEntity.get<Tags>()?.value?.join(', ') ?? '',
+      textInputAction: TextInputAction.newline,
+      keyboardType: TextInputType.text,
+      maxLines: null,
+      minLines: 2,
+      decoration: InputDecoration(
+          filled: true,
+          fillColor: appTheme.baseStyle.color.withOpacity(0.1),
+          contentPadding: const EdgeInsets.all(12),
+          border: OutlineInputBorder(
+              borderSide: BorderSide.none,
+              borderRadius: BorderRadius.circular(6),
+              gapPadding: 0),
+          hintText: localization.featureTagsHint,
+          hintStyle: appTheme.biggerBodyTextStyle
+              .copyWith(color: appTheme.baseStyle.color.withOpacity(0.5)),
+          hintMaxLines: 2),
+      onSaved: (contents) {
+        noteEntity.set(Tags(contents
+            .trim()
+            .split(',')
+            .where((tag) => tag.isNotEmpty)
+            .toList()));
+      },
+      onChanged: (_) {
+        noteEntity.set(Changed());
+      },
+      textAlign: TextAlign.left,
+      style: appTheme.biggerBodyTextStyle,
+    );
+  }
+
+  Card buildNoteCard(
+      Entity noteEntity, Localization localization, BaseTheme appTheme) {
     final timestamp = DateTime.now();
+    final style = appTheme.formLabelStyle;
 
     return Card(
       clipBehavior: Clip.antiAlias,
-      elevation: 8,
+      elevation: 4,
+      color: appTheme.appBarColor,
       margin: const EdgeInsets.all(0),
       child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 16.0),
+        padding: const EdgeInsets.all(16),
         child: Column(
           mainAxisAlignment: MainAxisAlignment.start,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: <Widget>[
-            buildTimestamp(timestamp, localization),
+            buildTimestamp(timestamp, localization, appTheme),
             Padding(
-              padding: const EdgeInsets.only(top: 8.0),
-              child: Text(localization.featureImageLabel),
-            ),
-            buildPicField(noteEntity, localization),
-            buildContentsField(noteEntity, localization),
-            Padding(
-              padding: const EdgeInsets.only(top: 8.0),
-              child: Text(localization.featureTodoLabel),
-            ),
-            buildListField(noteEntity, localization),
-            Padding(
-              padding: const EdgeInsets.only(top: 8.0),
-              child: Text(localization.featureTagsLabel),
-            ),
-            buildTagsField(noteEntity, localization),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget buildTimestamp(DateTime timestamp, Localization localization) {
-    return Padding(
-      padding: const EdgeInsets.only(top: 16, bottom: 4),
-      child: Text(
-        formatTimestamp(timestamp, localization),
-        style: Theme.of(context).textTheme.title.copyWith(
-            fontFamily: 'OpenSans', fontSize: 16, fontWeight: FontWeight.w700),
-      ),
-    );
-  }
-
-  Widget buildContentsField(Entity noteEntity, Localization localization) {
-    return Padding(
-      padding: const EdgeInsets.only(top: 16, bottom: 4),
-      child: TextFormField(
-        initialValue: noteEntity.get<Contents>()?.value ?? '',
-        decoration: InputDecoration(
-          hintText: localization.featureContentsHint,
-          labelText: localization.featureContentsLabel,
-        ),
-        onSaved: (contents) {
-          noteEntity.set(Contents(contents));
-        },
-        onChanged: (_) {
-          noteEntity.set(Changed());
-        },
-        validator: (contents) =>
-            contents.isEmpty ? localization.featureContentsError : null,
-        textAlign: TextAlign.left,
-      ),
-    );
-  }
-
-  Widget buildListField(Entity noteEntity, Localization localization) {
-    final items = noteEntity.get<Todo>()?.value ?? [];
-
-    return Padding(
-      padding: const EdgeInsets.only(top: 8, bottom: 16),
-      child: Column(
-          mainAxisAlignment: MainAxisAlignment.start,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            for (int index = 0; index < items.length; index++)
-              CheckboxListTile(
-                  value: items[index].isChecked,
-                  title: TextFormField(
-                    initialValue: items[index].label,
-                    textAlign: TextAlign.left,
-                    decoration: InputDecoration(
-                      hintText: localization.featureTodoLabel,
-                      labelText: localization.featureTodoItemLabel,
-                    ),
-                    onSaved: (item) {
-                      noteEntity.update<Todo>(
-                          (old) => old..value[index].label = item);
-                    },
-                    onChanged: (_) => noteEntity.set(Changed()),
-                    style: Theme.of(context).textTheme.body1.copyWith(
-                        decoration: items[index].isChecked
-                            ? TextDecoration.lineThrough
-                            : TextDecoration.none),
-                  ),
-                  secondary: IconButton(
-                    icon: Icon(Icons.delete),
-                    onPressed: () {
-                      noteEntity
-                        ..update<Todo>((old) => old..value.removeAt(index))
-                        ..set(Changed());
-                    },
-                  ),
-                  onChanged: (value) {
-                    noteEntity
-                      ..update<Todo>(
-                          (old) => old..value[index].isChecked = value)
-                      ..set(Changed());
-                  }),
-            FlatButton.icon(
-              icon: Icon(Icons.add),
-              label: Text(localization.featureTodoEnable),
-              onPressed: () {
-                if (noteEntity.hasT<Todo>())
-                  noteEntity
-                      .update<Todo>((old) => old..value.add(ListItem('')));
-                else
-                  noteEntity.set(Todo(value: [ListItem('')]));
-              },
-            )
-          ]),
-    );
-  }
-
-  Widget buildTagsField(Entity noteEntity, Localization localization) {
-    final tags = noteEntity.get<Tags>()?.value ?? [];
-
-    return Padding(
-        padding: const EdgeInsets.only(top: 8, bottom: 16),
-        child: Wrap(
-          children: <Widget>[
-            for (int i = 0; i < tags.length; i++)
-              ListTile(
-                leading: IconButton(
-                  icon: Icon(Icons.delete),
-                  onPressed: () {
-                    noteEntity
-                      ..update<Tags>((old) => old..value.removeAt(i))
-                      ..set(Changed());
-                  },
-                ),
-                title: TextFormField(
-                  initialValue: tags[i],
-                  decoration: InputDecoration(
-                    hintText: localization.featureTagItemLabel,
-                    labelText: localization.featureTagsLabel,
-                  ),
-                  onChanged: (_) => noteEntity.set(Changed()),
-                  onSaved: (tag) {
-                    return noteEntity
-                      ..update<Tags>((old) => old..value[i] = tag)
-                      ..set(Changed());
-                  },
-                  textAlign: TextAlign.left,
-                ),
+              padding: const EdgeInsets.only(top: 16),
+              child: Text(
+                localization.featureImageLabel,
+                style: style,
               ),
-            FlatButton.icon(
-              icon: Icon(Icons.add),
-              label: Text(localization.featureTagsEnable),
-              onPressed: () {
-                if (noteEntity.hasT<Tags>())
-                  noteEntity.update<Tags>((old) => Tags(old.value..add('')));
-                else
-                  noteEntity.set(Tags(const ['']));
-              },
-            )
+            ),
+            buildPicField(noteEntity, localization, appTheme),
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 16),
+              child: Text(
+                localization.featureContentsLabel,
+                style: style,
+              ),
+            ),
+            buildContentsField(noteEntity, localization, appTheme),
+            Padding(
+              padding: const EdgeInsets.only(top: 16),
+              child: Text(
+                localization.featureTodoLabel,
+                style: style,
+              ),
+            ),
+            buildListField(noteEntity, localization, appTheme),
+            Padding(
+              padding: const EdgeInsets.only(top: 8.0),
+              child: Text(
+                localization.featureTagsLabel,
+                style: style,
+              ),
+            ),
+            buildTagsField(noteEntity, localization, appTheme),
           ],
-        ));
+        ),
+      ),
+    );
   }
 
-  Widget buildPicField(Entity noteEntity, Localization localization) {
+  Widget buildTimestamp(
+      DateTime timestamp, Localization localization, BaseTheme appTheme) {
+    return Text(
+      formatTimestamp(timestamp, localization),
+      style: appTheme.cardWidgetTimestampStyle.copyWith(fontSize: 14),
+    );
+  }
+
+  Widget buildContentsField(
+      Entity noteEntity, Localization localization, BaseTheme appTheme) {
+    return TextFormField(
+      initialValue: noteEntity.get<Contents>()?.value ?? '',
+      textInputAction: TextInputAction.newline,
+      keyboardType: TextInputType.text,
+      maxLines: null,
+      minLines: 5,
+      decoration: InputDecoration(
+          filled: true,
+          fillColor: appTheme.baseStyle.color.withOpacity(0.1),
+          contentPadding: const EdgeInsets.all(12),
+          border: OutlineInputBorder(
+              borderSide: BorderSide.none,
+              borderRadius: BorderRadius.circular(6),
+              gapPadding: 0),
+          hintText: localization.featureContentsHint,
+          hintStyle: appTheme.biggerBodyTextStyle
+              .copyWith(color: appTheme.baseStyle.color.withOpacity(0.5)),
+          hintMaxLines: 2),
+      onSaved: (contents) {
+        noteEntity.set(Contents(contents));
+      },
+      onChanged: (_) {
+        noteEntity.set(Changed());
+      },
+      validator: (contents) =>
+          contents.isEmpty ? localization.featureContentsError : null,
+      textAlign: TextAlign.left,
+      style: appTheme.biggerBodyTextStyle,
+    );
+  }
+
+  Widget buildListField(
+      Entity noteEntity, Localization localization, BaseTheme appTheme) {
+    final todo = KtList<ListItem>.from(noteEntity.get<Todo>()?.value ?? []);
+
+    return TextFormField(
+      initialValue: todo
+              .map<String>(
+                  (item) => "${item.label}${item.isChecked ? '*' : ''}")
+              .filter((label) => label.isNotEmpty)
+              .joinToString(separator: '\n\n') ??
+          '',
+      minLines: 5,
+      textCapitalization: TextCapitalization.sentences,
+      textInputAction: TextInputAction.newline,
+      keyboardType: TextInputType.text,
+      maxLines: null,
+      decoration: InputDecoration(
+          filled: true,
+          fillColor: appTheme.baseStyle.color.withOpacity(0.1),
+          contentPadding: const EdgeInsets.all(12),
+          border: OutlineInputBorder(
+              borderSide: BorderSide.none,
+              borderRadius: BorderRadius.circular(6),
+              gapPadding: 0),
+          hintText: localization.featureTodoHint,
+          hintStyle: appTheme.biggerBodyTextStyle
+              .copyWith(color: appTheme.baseStyle.color.withOpacity(0.5)),
+          hintMaxLines: 5),
+      onSaved: (contents) {
+        noteEntity.set(Todo(
+            value: KtList.from(contents.split('\n'))
+                .map((item) => ListItem(item.replaceAll('*', ''),
+                    isChecked: item.endsWith('*')))
+                .filter((item) => item.label.isNotEmpty)
+                .asList()));
+      },
+      onChanged: (_) {
+        noteEntity.set(Changed());
+      },
+      textAlign: TextAlign.left,
+      style: appTheme.biggerBodyTextStyle,
+    );
+  }
+
+  void setPicture(String path) {
+    final entityManager = EntityManagerProvider.of(context).entityManager;
+    if (path == null)
+      entityManager.getUniqueEntity<FeatureEntityTag>().remove<Picture>();
+    else
+      entityManager.getUniqueEntity<FeatureEntityTag>().set(Picture(path));
+
+    entityManager.getUniqueEntity<FeatureEntityTag>().set(Changed());
+  }
+
+  Widget buildPicField(
+      Entity noteEntity, Localization localization, BaseTheme appTheme) {
     final picFile = noteEntity.get<Picture>()?.value;
-
-    if (picFile == null)
-      return ButtonBar(
-        alignment: MainAxisAlignment.center,
-        children: <Widget>[
-          FlatButton(
-              child: Text('Tirar foto'),
-              onPressed: () async {
-                final image =
-                    await ImagePicker.pickImage(source: ImageSource.camera);
-
-                final em = EntityManagerProvider.of(context).entityManager;
-
-                final timestamp =
-                    DateTime.now().millisecondsSinceEpoch.toString();
-                final path = (await getExternalStorageDirectory()).path;
-                final newPath = '$path/Media/$timestamp.jpeg';
-                image
-                  ..copySync(newPath)
-                  ..deleteSync();
-                em.getUniqueEntity<FeatureEntityTag>().set(Picture(newPath));
-              }),
-          FlatButton(
-            child: Text('Selecionar foto'),
-            onPressed: () async {
-              final image =
-                  await ImagePicker.pickImage(source: ImageSource.gallery);
-
-              if (image == null) {
-                return;
-              }
-
-              final em = EntityManagerProvider.of(context).entityManager;
-
-              final timestamp =
-                  DateTime.now().millisecondsSinceEpoch.toString();
-              final path = (await getExternalStorageDirectory()).path;
-              final newPath = '$path/Media/$timestamp.jpeg';
-              image
-                ..copySync(newPath)
-                ..deleteSync();
-              em.getUniqueEntity<FeatureEntityTag>().set(Picture(newPath));
-            },
-          )
-        ],
-      );
+    final style = appTheme.actionableLabelStyle;
 
     return Padding(
-      padding: const EdgeInsets.only(top: 4, bottom: 8),
-      child:
-          Hero(tag: picFile.path, child: Image.file(picFile, fit: BoxFit.fill)),
+      padding: const EdgeInsets.symmetric(vertical: 12),
+      child: Stack(
+        alignment: Alignment.center,
+        children: <Widget>[
+          if (picFile != null) ...[
+            Hero(
+                tag: picFile.path,
+                child: Image.file(picFile, fit: BoxFit.fill)),
+            Positioned(
+              top: 0,
+              right: 0,
+              child: IconButton(
+                icon: Icon(
+                  AppIcons.cancel,
+                  color: Colors.red,
+                ),
+                onPressed: () {
+                  picFile.deleteSync();
+                  noteEntity
+                    ..remove<Picture>()
+                    ..set(Changed());
+                },
+              ),
+            )
+          ],
+          Container(
+            color: appTheme.primaryColor.withOpacity(0.8),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: <Widget>[
+                if (Platform.isAndroid || Platform.isIOS)
+                  FlatButton(
+                      child:
+                          Text(localization.featureImageCamera, style: style),
+                      onPressed: () async {
+                        final image = await ImagePicker.pickImage(
+                            source: ImageSource.camera);
+
+                        final em =
+                            EntityManagerProvider.of(context).entityManager;
+
+                        final timestamp =
+                            DateTime.now().millisecondsSinceEpoch.toString();
+                        final path = (await getExternalStorageDirectory()).path;
+                        final newPath = '$path/Pictures/$timestamp.jpeg';
+                        image
+                          ..copySync(newPath)
+                          ..deleteSync();
+                        em
+                            .getUniqueEntity<FeatureEntityTag>()
+                            .set(Picture(newPath));
+                      }),
+                FlatButton(
+                  child: Text(
+                    localization.featureImageGallery,
+                    style: style,
+                  ),
+                  onPressed: () async {
+                    if (Platform.isFuchsia ||
+                        Platform.isWindows ||
+                        Platform.isLinux) {
+                      selectImageDesktop(setPicture);
+                    } else
+                      selectImage(setPicture);
+                  },
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
     );
+  }
+
+  void selectImage(Function(String) callback) async {
+    final image = await ImagePicker.pickImage(source: ImageSource.gallery);
+
+    if (image == null) {
+      return null;
+    }
+
+    final timestamp = DateTime.now().millisecondsSinceEpoch.toString();
+    final originPath = (await getExternalStorageDirectory()).path;
+    final newPath = '$originPath/Pictures/$timestamp.jpeg';
+    image
+      ..copySync(newPath)
+      ..deleteSync();
+
+    callback(newPath);
+  }
+
+  void selectImageDesktop(Function(String) callback) {
+    /* showOpenPanel((result, paths) {
+      if (result == FileChooserResult.ok && paths.isNotEmpty) {
+        final originPath = paths.first;
+        final image = File(originPath);
+        final timestamp = DateTime.now().millisecondsSinceEpoch.toString();
+        final newPath = './Files/Pictures/$timestamp.jpeg';
+        image.copySync(newPath);
+
+        callback(newPath);
+      }
+    }); */
+    return null;
   }
 }

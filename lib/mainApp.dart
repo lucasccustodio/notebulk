@@ -1,394 +1,378 @@
+import 'dart:io';
+
 import 'package:entitas_ff/entitas_ff.dart';
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:notebulk/ecs/components.dart';
 import 'package:notebulk/pages/archivePage.dart';
-import 'package:notebulk/pages/notesPage.dart';
+import 'package:notebulk/pages/noteListPage.dart';
+import 'package:notebulk/pages/reminderListPage.dart';
 import 'package:notebulk/pages/searchPage.dart';
 import 'package:notebulk/pages/settingsPage.dart';
+import 'package:notebulk/theme.dart';
 import 'package:notebulk/util.dart';
 import 'package:notebulk/widgets/util.dart';
-import 'package:tinycolor/tinycolor.dart';
 
-class MainApp extends StatelessWidget {
+class MainApp extends StatefulWidget {
   const MainApp({Key key, this.entityManager}) : super(key: key);
 
   final EntityManager entityManager;
+
+  @override
+  _MainAppState createState() => _MainAppState();
+}
+
+class _MainAppState extends State<MainApp> {
   final Curve curve = Curves.easeIn;
+
   final Duration duration = const Duration(milliseconds: 200);
+  PageController pageController;
+  GlobalKey<ScaffoldState> scaffoldKey;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    pageController = PageController(
+        keepPage: true,
+        initialPage: widget.entityManager.getUnique<PageIndex>().value);
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    scaffoldKey = GlobalKey<ScaffoldState>();
+  }
 
   @override
   Widget build(BuildContext context) {
-    final darkMode = Theme.of(context).brightness == Brightness.dark;
-    final localization =
-        entityManager.getUniqueEntity<AppSettingsTag>().get<Localization>();
+    final localization = widget.entityManager
+        .getUniqueEntity<AppSettingsTag>()
+        .get<Localization>();
+    final appTheme = widget.entityManager
+        .getUniqueEntity<AppSettingsTag>()
+        .get<AppTheme>()
+        .value;
 
     return WillPopScope(
       onWillPop: () async {
         return showDialog(
             context: context,
-            builder: (context) => AlertDialog(
-                  title: Text(
-                    'Deseja sair?',
-                  ),
-                  actions: <Widget>[
-                    FlatButton(
-                      child: Text('Não'),
-                      onPressed: () => Navigator.of(context).pop(false),
-                    ),
-                    FlatButton(
-                      child: Text('Sim'),
-                      onPressed: () => Navigator.of(context).pop(true),
-                    ),
-                  ],
-                ));
+            builder: (context) => ShouldLeavePromptDialog(
+                appTheme: appTheme,
+                noLabel: localization.no,
+                yesLabel: localization.yes,
+                message: localization.promptLeaveApp,
+                onYes: () {
+                  Navigator.of(context).pop(true);
+                },
+                onNo: () {
+                  Navigator.of(context).pop(false);
+                }));
       },
-      child: Scaffold(
-          resizeToAvoidBottomInset: false,
-          extendBody: true,
-          appBar: AppBar(
-            title: AnimatableEntityObservingWidget(
-              startAnimating: false,
-              duration: duration,
-              curve: curve,
-              provider: (em) => em.getUniqueEntity<PageNavigationTag>(),
-              tweens: {'opacity': Tween<double>(begin: 1.0, end: 0.0)},
-              animateUpdated: (oldC, newC) {
-                return oldC is NextIndex && newC is NextIndex
-                    ? EntityAnimation.forward
-                    : EntityAnimation.none;
-              },
-              builder: (e, animations, context) {
-                final index = e.get<CurrentIndex>().value;
-                final nextIndex = e.get<NextIndex>().value;
-                final opacity = animations['opacity'].value;
+      child: EntityObservingWidget(
+        provider: (em) => em.getUniqueEntity<AppSettingsTag>(),
+        blacklist: const [Localization],
+        builder: (_, __) {
+          final appTheme = widget.entityManager
+              .getUniqueEntity<AppSettingsTag>()
+              .get<AppTheme>()
+              .value;
 
-                final names = [
-                  localization.showNotesTitle,
-                  localization.searchNotesTitle,
-                  localization.archivedNotesTitle,
-                  localization.settingsPageTitle
-                ];
+          final isLandspace =
+              MediaQuery.of(context).orientation == Orientation.landscape;
 
-                return Stack(
-                  children: <Widget>[
-                    Opacity(
-                      opacity: opacity,
-                      child: Text(
-                        names[index],
-                        style: Theme.of(context).textTheme.title,
-                      ),
-                    ),
-                    Opacity(
-                      opacity: 1.0 - opacity,
-                      child: Text(
-                        names[nextIndex],
-                        style: Theme.of(context).textTheme.title,
-                      ),
-                    )
-                  ],
-                );
-              },
-            ),
-          ),
-          bottomNavigationBar: buildBottomBar(context, darkMode: darkMode),
-          body: buildScaffoldBody(context, darkMode: darkMode)),
+          return GestureDetector(
+            behavior: HitTestBehavior.translucent,
+            onTap: () {
+              final selected =
+                  widget.entityManager.group(any: [Selected]).entities;
+              for (final e in selected) e.remove<Selected>();
+            },
+            child: Scaffold(
+                key: scaffoldKey,
+                resizeToAvoidBottomInset: false,
+                appBar: isLandspace
+                    ? null
+                    : AppBar(
+                        elevation: 4,
+                        brightness: appTheme.brightness,
+                        backgroundColor: appTheme.appBarColor,
+                        leading: Platform.isAndroid || Platform.isIOS
+                            ? IconButton(
+                                icon: Icon(
+                                  AppIcons.menu,
+                                  color: appTheme.tertiaryButtonColor,
+                                ),
+                                onPressed: () {
+                                  scaffoldKey.currentState.openDrawer();
+                                },
+                              )
+                            : SizedBox(),
+                        automaticallyImplyLeading: false,
+                        bottom: PreferredSize(
+                          child: buildTabBar(appTheme, localization),
+                          preferredSize: Size(MediaQuery.of(context).size.width,
+                              kTextTabBarHeight),
+                        ),
+                        title: Text(
+                          'NOTEBULK',
+                          style: appTheme.appTitleTextStyle,
+                        )),
+                drawer: !isLandspace && (Platform.isAndroid || Platform.isIOS)
+                    ? buildDrawer(appTheme)
+                    : null,
+                drawerDragStartBehavior: DragStartBehavior.down,
+                drawerScrimColor: Colors.black54,
+                body: buildScaffoldBody(appTheme)),
+          );
+        },
+      ),
     );
   }
 
-  Stack buildScaffoldBody(BuildContext context, {bool darkMode = true}) {
+  Drawer buildDrawer(BaseTheme appTheme) {
+    final localization = widget.entityManager
+        .getUniqueEntity<AppSettingsTag>()
+        .get<Localization>();
+
+    return Drawer(
+      key: ValueKey('NotebulkDrawer'),
+      child: Container(
+        decoration: BoxDecoration(gradient: appTheme.backgroundGradient),
+        child: ListView(
+          shrinkWrap: true,
+          children: <Widget>[
+            Container(
+              height: MediaQuery.of(context).size.height * 0.25,
+              width: MediaQuery.of(context).size.width,
+              alignment: Alignment.center,
+              child: Text(
+                localization.settingsPageTitle,
+                style: appTheme.appTitleTextStyle,
+              ),
+            ),
+            SettingsPage(
+              entityManager: widget.entityManager,
+            ),
+            /* Divider(),
+            ListTile(
+              title: Text(
+                'TAGS',
+                style: appTheme.titleTextStyle,
+              ),
+            ),
+            FlatButton.icon(
+              materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+              icon: Icon(
+                AppIcons.plus,
+                color: appTheme.primaryButtonColor,
+              ),
+              label: Text(
+                'Criar tag',
+                style: appTheme.actionableLabelStyle
+                    .copyWith(color: appTheme.primaryButtonColor),
+              ),
+              onPressed: () {
+                widget.entityManager
+                    .setUnique(NavigationEvent.push(Routes.manageTags));
+              },
+            ),
+            GroupObservingWidget(
+              matcher: Matchers.tag,
+              builder: (group, context) {
+                final tags = group.entities.toList()
+                  ..sort((s1, s2) {
+                    final tag1 = s1.get<TagData>().value;
+                    final tag2 = s1.get<TagData>().value;
+
+                    return tag2.compareTo(tag1);
+                  });
+
+                return ListView.builder(
+                  shrinkWrap: true,
+                  physics: NeverScrollableScrollPhysics(),
+                  itemCount: tags.length,
+                  itemBuilder: (context, index) => ListTile(
+                    title: Row(
+                      mainAxisSize: MainAxisSize.max,
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: <Widget>[
+                        Icon(
+                          Icons.label,
+                          color: appTheme.subtitleTextStyle.color,
+                        ),
+                        SizedBox(
+                          width: 8,
+                        ),
+                        Text(
+                          tags[index].get<TagData>().value,
+                          style: appTheme.subtitleTextStyle,
+                        ),
+                      ],
+                    ),
+                  ),
+                );
+              },
+            ) */
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget buildScaffoldBody(BaseTheme appTheme) {
+    final localization = widget.entityManager
+        .getUniqueEntity<AppSettingsTag>()
+        .get<Localization>();
+
     return Stack(
       children: <Widget>[
         SafeArea(
           maintainBottomViewPadding: false,
           bottom: true,
-          child: AnimatableEntityObservingWidget(
-            startAnimating: false,
-            provider: (em) => em.getUniqueEntity<PageNavigationTag>(),
-            tweens: {'opacity': Tween<double>(begin: 1.0, end: 0.0)},
-            duration: duration,
-            curve: curve,
-            onAnimationEnd: (reversed) {
-              if (reversed) {
-                return;
-              }
-
-              final newCurrentIndex = entityManager
-                  .getUniqueEntity<PageNavigationTag>()
-                  .get<NextIndex>()
-                  .value;
-
-              entityManager
-                  .getUniqueEntity<PageNavigationTag>()
-                  .set(CurrentIndex(newCurrentIndex));
-            },
-            animateUpdated: (oldC, newC) {
-              if (oldC is NextIndex && newC is NextIndex) {
-                final currentIndex = entityManager
-                    .getUniqueEntity<PageNavigationTag>()
-                    .get<CurrentIndex>()
-                    .value;
-
-                return newC.value != currentIndex
-                    ? EntityAnimation.forward
-                    : EntityAnimation.none;
-              } else
-                return EntityAnimation.none;
-            },
-            builder: (e, animations, context) {
-              Widget pageWidget = Container();
-              Widget nextPageWidget = Container();
-              final index = e.get<CurrentIndex>().value;
-              final nextIndex = e.get<NextIndex>().value;
-              final opacity = animations['opacity'].value;
-
-              switch (index) {
-                case 0:
-                  pageWidget = NotesPage(entityManager: entityManager);
-                  break;
-                case 1:
-                  pageWidget = SearchPage(entityManager: entityManager);
-                  break;
-                case 2:
-                  pageWidget = ArchivePage(
-                    entityManager: entityManager,
-                  );
-                  break;
-                case 3:
-                  pageWidget = SettingsPage(entityManager: entityManager);
-                  break;
-                default:
-                  break;
-              }
-
-              switch (nextIndex) {
-                case 0:
-                  nextPageWidget = NotesPage(entityManager: entityManager);
-                  break;
-                case 1:
-                  nextPageWidget = SearchPage(entityManager: entityManager);
-                  break;
-                case 2:
-                  nextPageWidget = ArchivePage(
-                    entityManager: entityManager,
-                  );
-                  break;
-                case 3:
-                  nextPageWidget = SettingsPage(entityManager: entityManager);
-                  break;
-                default:
-                  break;
-              }
-
-              return Stack(
-                children: <Widget>[
-                  if (opacity > 0) Opacity(opacity: opacity, child: pageWidget),
-                  if (opacity < 1.0)
-                    Opacity(
-                      opacity: 1.0 - opacity,
-                      child: nextPageWidget,
-                    )
-                ],
-              );
-            },
+          child: Theme(
+            data: ThemeData(accentColor: appTheme.primaryColor),
+            child: Platform.isAndroid || Platform.isIOS
+                ? PageView(
+                    dragStartBehavior: DragStartBehavior.down,
+                    controller: pageController,
+                    onPageChanged: (page) => widget.entityManager.setUnique(
+                        PageIndex(page,
+                            oldValue: widget.entityManager
+                                .getUnique<PageIndex>()
+                                .value)),
+                    children: <Widget>[
+                      NoteListPage(
+                        entityManager: widget.entityManager,
+                        key: ValueKey('NotesPage'),
+                      ),
+                      ReminderListPage(
+                        entityManager: widget.entityManager,
+                        key: ValueKey('EventsPage'),
+                      ),
+                      SearchPage(
+                        entityManager: widget.entityManager,
+                        key: ValueKey('SearchPage'),
+                      ),
+                      ArchivePage(
+                        entityManager: widget.entityManager,
+                        key: ValueKey('ArchivePage'),
+                      )
+                    ],
+                  )
+                : EntityObservingWidget(
+                    provider: (em) => em.getUniqueEntity<PageIndex>(),
+                    builder: (e, __) => <Widget>[
+                      NoteListPage(
+                        entityManager: widget.entityManager,
+                        key: ValueKey('NotesPage'),
+                      ),
+                      ReminderListPage(
+                        entityManager: widget.entityManager,
+                        key: ValueKey('EventsPage'),
+                      ),
+                      SearchPage(
+                        entityManager: widget.entityManager,
+                        key: ValueKey('SearchPage'),
+                      ),
+                      ArchivePage(
+                        entityManager: widget.entityManager,
+                        key: ValueKey('ArchivePage'),
+                      ),
+                      SettingsPage(
+                        entityManager: widget.entityManager,
+                        key: ValueKey('SettingsPage'),
+                      )
+                    ][e.get<PageIndex>().value],
+                  ),
           ),
-        ),
-        AnimatableEntityObservingWidget(
-          provider: (em) => em.getUniqueEntity<DisplayStatusTag>(),
-          startAnimating: false,
-          duration: Duration(milliseconds: 300),
-          curve: Curves.easeInOut,
-          tweens: {
-            'size': Tween<double>(begin: 0.0, end: kBottomNavigationBarHeight)
-          },
-          animateAdded: (c) =>
-              c is Toggle ? EntityAnimation.forward : EntityAnimation.none,
-          animateRemoved: (c) =>
-              c is Toggle ? EntityAnimation.reverse : EntityAnimation.none,
-          animateUpdated: (_, __) => EntityAnimation.none,
-          builder: (statusEntity, animations, context) => Positioned(
-              bottom:
-                  kBottomNavigationBarHeight + 8 + (animations['size'].value),
-              right: 8,
-              child: EntityObservingWidget(
-                  provider: (em) => em.getUniqueEntity<PageNavigationTag>(),
-                  builder: (pageEntity, context) {
-                    final index = pageEntity.get<CurrentIndex>().value ?? 0;
-
-                    return index == 0
-                        ? buildFAB(darkMode: darkMode)
-                        : SizedBox(
-                            width: 0,
-                            height: 0,
-                          );
-                  })),
         ),
         Positioned(
-          bottom: kBottomNavigationBarHeight,
-          child: AnimatableEntityObservingWidget(
-            provider: (em) => em.getUniqueEntity<DisplayStatusTag>(),
-            startAnimating: false,
-            curve: Curves.easeInOut,
-            duration: Duration(milliseconds: 300),
-            tweens: {
-              'size': Tween<double>(begin: 0, end: kBottomNavigationBarHeight)
-            },
-            animateAdded: (c) =>
-                c is Toggle ? EntityAnimation.forward : EntityAnimation.none,
-            animateRemoved: (c) =>
-                c is Toggle ? EntityAnimation.reverse : EntityAnimation.none,
-            animateUpdated: (_, __) => EntityAnimation.none,
-            builder: (statusEntity, animations, context) {
-              final localization = entityManager
-                  .getUniqueEntity<AppSettingsTag>()
-                  .get<Localization>();
-
-              return Container(
-                color: darkMode ? Colors.black : Colors.white,
-                width: MediaQuery.of(context).size.width,
-                height: animations['size'].value,
-                child: statusEntity.hasT<Toggle>()
-                    ? EntityObservingWidget(
-                        provider: (em) =>
-                            em.getUniqueEntity<PageNavigationTag>(),
-                        builder: (pageEntity, context) {
-                          final index =
-                              pageEntity.get<CurrentIndex>().value ?? 0;
-
-                          return Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                            crossAxisAlignment: CrossAxisAlignment.center,
-                            children: <Widget>[
-                              Text(statusEntity.get<Contents>()?.value ?? ''),
-                              if (index == 3)
-                                FlatButton(
-                                  child: Text(localization.hideActionLabel),
-                                  onPressed: () {
-                                    statusEntity.remove<Toggle>();
-                                  },
-                                )
-                              else if (index == 0)
-                                FlatButton(
-                                  materialTapTargetSize:
-                                      MaterialTapTargetSize.shrinkWrap,
-                                  child: Text(localization.archiveActionLabel),
-                                  onPressed: () {
-                                    entityManager
-                                        .setUnique(ArchiveNotesEvent());
-                                  },
-                                )
-                              else if (index == 2)
-                                FlatButton(
-                                  materialTapTargetSize:
-                                      MaterialTapTargetSize.shrinkWrap,
-                                  child: Text(localization.restoreActionLabel),
-                                  onPressed: () {
-                                    entityManager
-                                        .setUnique(RestoreNotesEvent());
-                                  },
-                                ),
-                              if (index != 3)
-                                FlatButton(
-                                  child: Text(localization.deleteActionLabel),
-                                  materialTapTargetSize:
-                                      MaterialTapTargetSize.shrinkWrap,
-                                  onPressed: () {
-                                    entityManager.setUnique(DeleteNotesEvent());
-                                  },
-                                )
-                            ],
-                          );
-                        },
-                      )
-                    : SizedBox(
-                        width: 0,
-                        height: 0,
-                      ),
-              );
-            },
+          bottom: 0,
+          child: StatusBarContainer(
+            key: ValueKey('StatusBar'),
+            actions: (index) => <Widget>[
+              if (index == 0)
+                FlatButton(
+                  child: Text(
+                    localization.archiveActionLabel,
+                    style: appTheme.actionableLabelStyle,
+                  ),
+                  onPressed: () {
+                    widget.entityManager.setUnique(ArchiveNotesEvent());
+                  },
+                )
+              else if (index == 1 &&
+                  !widget.entityManager
+                      .group(any: [Selected])
+                      .entities
+                      .any((e) => e.hasT<Toggle>()))
+                FlatButton(
+                  child: Text(localization.completeActionLabel),
+                  onPressed: () {
+                    widget.entityManager.setUnique(CompleteRemindersEvent());
+                  },
+                )
+              else if (index == 3)
+                FlatButton(
+                    child: Text(localization.restoreActionLabel),
+                    onPressed: () {
+                      widget.entityManager.setUnique(RestoreNotesEvent());
+                    }),
+              if (index != 3)
+                FlatButton(
+                  child: Text(
+                    localization.deleteActionLabel,
+                    style: appTheme.actionableLabelStyle,
+                  ),
+                  onPressed: () {
+                    widget.entityManager.setUnique(DiscardSelectedEvent());
+                  },
+                )
+            ],
           ),
-        ),
+        )
       ],
     );
   }
 
-  Widget buildFAB({bool darkMode = true}) {
-    return AnimatableEntityObservingWidget(
-        startAnimating: false,
-        curve: Curves.bounceInOut,
-        duration: Duration(milliseconds: 200),
-        provider: (em) => em.getUniqueEntity<FABTag>(),
-        tweens: {
-          'iconColor': ColorTween(
-              begin: darkMode ? Colors.white : Colors.black, end: Colors.red),
-          'iconOpacity': Tween<double>(begin: 0.0, end: 1.0)
-        },
-        animateAdded: (c) =>
-            c is Toggle ? EntityAnimation.forward : EntityAnimation.none,
-        animateRemoved: (c) =>
-            c is Toggle ? EntityAnimation.reverse : EntityAnimation.none,
-        animateUpdated: (oldC, newC) => EntityAnimation.none,
-        builder: (fabEntity, animations, __) {
-          return FABMenu(
-            numButtons: 2,
-            buttonIcons: [Icons.note, Icons.list],
-            animateIcon: animations['iconOpacity'],
-            toggleButtonColor: animations['iconColor'],
-            onToggle: () {
-              if (fabEntity.hasT<Toggle>())
-                fabEntity.remove<Toggle>();
-              else
-                fabEntity.set(Toggle());
-            },
-            onPressed: (index) {
-              final routes = [
-                Routes.createNote,
-                Routes.testPage,
-              ];
-
-              entityManager.setUnique(NavigationEvent.push(routes[index]));
-
-              fabEntity.remove<Toggle>();
-            },
-          );
-        });
-  }
-
-  Widget buildBottomBar(BuildContext context, {bool darkMode = true}) {
-    final iconColor = TinyColor(Theme.of(context).accentColor).isDark()
-        ? Colors.white
-        : Colors.black;
-
+  Widget buildTabBar(BaseTheme appTheme, Localization localization) {
     return AnimatableEntityObservingWidget(
       duration: duration,
       curve: curve,
-      provider: (em) => em.getUniqueEntity<PageNavigationTag>(),
-      startAnimating: true,
+      provider: (em) => em.getUniqueEntity<PageIndex>(),
+      startAnimating: false,
       tweens: {
-        'iconScale': Tween<double>(begin: 1.0, end: 1.5),
-        'iconColor': ColorTween(begin: Colors.grey, end: iconColor)
+        'iconScale': Tween<double>(begin: 0.0, end: 1.0),
+        'iconColor': ColorTween(
+            begin: appTheme.otherTabItemColor,
+            end: appTheme.selectedTabItemColor)
       },
-      animateUpdated: (_, c) =>
-          c is CurrentIndex ? EntityAnimation.forward : EntityAnimation.reverse,
+      //animateUpdated: (_, __) => EntityAnimation.forward,
       builder: (pageEntity, animations, __) {
-        final pageIndex = pageEntity.get<CurrentIndex>().value;
+        final pageIndex = pageEntity.get<PageIndex>().value;
 
         return BottomNavigation(
           index: pageIndex,
           scaleIcon: animations['iconScale'],
           colorIcon: animations['iconColor'],
-          containerColor: Theme.of(context).primaryColor,
-          onTap: (index) {
+          appTheme: appTheme,
+          prevIndex: pageEntity.get<PageIndex>().oldValue,
+          onTap: (index) async {
             if (index != pageIndex) {
-              entityManager
-                ..getUniqueEntity<PageNavigationTag>().set(NextIndex(index))
-                ..getUniqueEntity<FABTag>().remove<Toggle>();
+              if (Platform.isAndroid || Platform.isIOS)
+                await pageController.animateToPage(index,
+                    duration: duration, curve: curve);
+
+              widget.entityManager
+                  .getUniqueEntity<PageIndex>()
+                  .set(PageIndex(index, oldValue: pageIndex));
             }
           },
           items: [
-            TabItem(icon: Icons.home),
-            TabItem(icon: Icons.search),
-            TabItem(icon: Icons.archive),
-            TabItem(icon: Icons.settings),
+            for (final label in localization.pageLabels) TabItem(label: label),
+            if (Platform.isWindows || Platform.isLinux || Platform.isFuchsia)
+              TabItem(label: localization.settingsPageTitle)
           ],
         );
       },

@@ -22,7 +22,7 @@ class StorageErrorPage extends StatelessWidget {
             ),
             FlatButton.icon(
               icon: Icon(Icons.settings),
-              label: Text('Quero permitir!'),
+              label: Text('Quero permitir'),
               onPressed: () async {
                 final status = (await Permission.requestPermissions(
                         [PermissionName.Storage]))

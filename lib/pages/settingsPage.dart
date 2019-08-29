@@ -1,8 +1,8 @@
 import 'package:entitas_ff/entitas_ff.dart';
 import 'package:flutter/material.dart';
 import 'package:notebulk/ecs/components.dart';
+import 'package:notebulk/theme.dart';
 import 'package:notebulk/util.dart';
-import 'package:tinycolor/tinycolor.dart';
 
 class SettingsPage extends StatelessWidget {
   const SettingsPage({Key key, this.entityManager}) : super(key: key);
@@ -11,74 +11,63 @@ class SettingsPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final darkMode = Theme.of(context).brightness == Brightness.dark;
     final localization =
         entityManager.getUniqueEntity<AppSettingsTag>().get<Localization>();
-    final textColor = TinyColor(Theme.of(context).accentColor).isDark()
-        ? Colors.white
-        : Colors.black;
+    final appTheme =
+        entityManager.getUniqueEntity<AppSettingsTag>().get<AppTheme>().value;
 
-    return Column(
-      mainAxisAlignment: MainAxisAlignment.start,
-      children: <Widget>[
-        ListTile(
-          title: Text(localization.settingsColorLabel),
-        ),
-        Padding(
-          padding: const EdgeInsets.all(8.0),
-          child: Wrap(
-            children: [
-              for (int i = 0; i < Colors.primaries.length; i++)
-                InkWell(
-                  onTap: () => entityManager.getUniqueEntity<AppSettingsTag>()
-                    ..set(ThemeColor(Colors.primaries[i])),
-                  child: Container(
-                    color: Colors.primaries[i],
-                    foregroundDecoration: BoxDecoration(
-                        border: Colors.primaries[i] ==
-                                entityManager
-                                    .getUniqueEntity<AppSettingsTag>()
-                                    .get<ThemeColor>()
-                                    .value
-                            ? Border.all(
-                                color: darkMode ? Colors.white : Colors.black)
-                            : null),
-                    width: 50,
-                    height: 50,
-                  ),
-                )
-            ],
+    return SingleChildScrollView(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.start,
+        children: <Widget>[
+          SwitchListTile(
+              dense: true,
+              activeColor: appTheme.primaryButtonColor,
+              title: Text(
+                localization.settingsDarkModeLabel,
+                style: appTheme.titleTextStyle,
+              ),
+              value: appTheme.brightness == Brightness.dark,
+              onChanged: (enabled) {
+                entityManager
+                    .getUniqueEntity<AppSettingsTag>()
+                    .set(AppTheme(enabled ? DarkTheme() : LightTheme()));
+                entityManager.setUnique(PersistUserSettingsEvent());
+              }),
+          Divider(),
+          ListTile(
+            dense: true,
+            title: Text(
+              'Backup',
+              style: appTheme.titleTextStyle,
+            ),
           ),
-        ),
-        SwitchListTile(
-          title: Text(localization.settingsDarkModeLabel),
-          value: darkMode,
-          onChanged: (_) => entityManager
-              .getUniqueEntity<AppSettingsTag>()
-              .update<DarkMode>((old) => DarkMode(value: !old.value)),
-        ),
-        ListTile(
-          title: Text('Backup'),
-        ),
-        RaisedButton.icon(
-          icon: Icon(Icons.save),
-          color: Theme.of(context).accentColor,
-          textColor: textColor,
-          label: Text(localization.settingsExportLabel),
-          onPressed: () {
-            entityManager.setUnique(ExportNotesEvent());
-          },
-        ),
-        RaisedButton.icon(
-          icon: Icon(Icons.settings_backup_restore),
-          color: Theme.of(context).accentColor,
-          textColor: textColor,
-          label: Text(localization.settingsImportLabel),
-          onPressed: () {
-            entityManager.setUnique(ImportNotesEvent());
-          },
-        )
-      ],
+          FlatButton.icon(
+            icon: Icon(
+              AppIcons.download,
+              color: appTheme.buttonIconColor,
+            ),
+            color: appTheme.primaryButtonColor,
+            textColor: appTheme.buttonLabelColor,
+            label: Text(localization.settingsExportLabel),
+            onPressed: () {
+              entityManager.setUnique(ExportNotesEvent());
+            },
+          ),
+          FlatButton.icon(
+            icon: Icon(AppIcons.upload, color: appTheme.buttonIconColor),
+            color: appTheme.primaryButtonColor,
+            textColor: appTheme.buttonLabelColor,
+            label: Text(localization.settingsImportLabel),
+            onPressed: () {
+              entityManager.setUnique(ImportNotesEvent());
+            },
+          ),
+          SizedBox(
+            height: 16,
+          )
+        ],
+      ),
     );
   }
 }

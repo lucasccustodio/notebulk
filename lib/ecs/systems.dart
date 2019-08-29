@@ -1,14 +1,18 @@
+import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:entitas_ff/entitas_ff.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:hive/hive.dart';
+import 'package:kt_dart/kt.dart';
 import 'package:notebulk/ecs/components.dart';
 import 'package:notebulk/ecs/matchers.dart';
+import 'package:notebulk/theme.dart';
 import 'package:notebulk/util.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:permission/permission.dart';
-import 'package:sembast/sembast.dart';
-import 'package:sembast/sembast_io.dart';
 
 class TickSystem extends EntityManagerSystem
     implements InitSystem, ExecuteSystem {
@@ -60,16 +64,15 @@ class SearchSystem extends EntityManagerSystem implements ExecuteSystem {
   @override
   void execute() {
     final searchEntity = entityManager.getUniqueEntity<SearchBarTag>();
-    final term = searchEntity.get<SearchTerm>()?.value;
-
-    if (term == null || term.isEmpty) {
-      return;
-    }
-
+    final searchTerm = searchEntity.get<SearchTerm>()?.value;
     final notes = entityManager.groupMatching(Matchers.note);
 
     for (var note in notes.entities) {
       note.remove<SearchResult>();
+    }
+
+    if (searchTerm == null || searchTerm.isEmpty || searchTerm.length < 2) {
+      return;
     }
 
     final mainTick =
@@ -87,13 +90,14 @@ class SearchSystem extends EntityManagerSystem implements ExecuteSystem {
 
       final tags = note.get<Tags>().value;
 
-      if (tags.contains(term))
+      if (tags.contains(searchTerm))
         note.set(SearchResult());
       else {
         for (var tag in tags) {
-          if (RegExp(term).hasMatch(tag)) {
-            note.set(SearchResult());
-          }
+          for (final term in searchTerm.split(' '))
+            if (RegExp('\^$term', caseSensitive: false).hasMatch(tag)) {
+              note.set(SearchResult());
+            }
         }
       }
     }
@@ -102,25 +106,23 @@ class SearchSystem extends EntityManagerSystem implements ExecuteSystem {
   }
 }
 
-class DisplaySelectedSystem extends TriggeredSystem {
+class StatusBarSystem extends TriggeredSystem {
   @override
   GroupChangeEvent get event => GroupChangeEvent.any;
 
   @override
-  EntityMatcher get matcher => EntityMatcher(all: [Selected]);
+  EntityMatcher get matcher => EntityMatcher(any: [Selected]);
 
   @override
   void executeOnChange() {
-    final selected = entityManager.group(all: [Selected]);
+    final selected = entityManager.group(any: [Selected]).entities;
     final label = entityManager
         .getUniqueEntity<AppSettingsTag>()
         .get<Localization>()
         .selectedLabel;
 
-    if (!selected.isEmpty) {
-      entityManager
-          .getUniqueEntity<DisplayStatusTag>()
-          .set(Contents('${selected.entities.length} $label'));
+    if (selected.isNotEmpty) {
+      entityManager.getUniqueEntity<DisplayStatusTag>().set(Contents('$label'));
       entityManager.getUniqueEntity<DisplayStatusTag>().set(Toggle());
     } else {
       entityManager.getUniqueEntity<DisplayStatusTag>()
@@ -130,12 +132,13 @@ class DisplaySelectedSystem extends TriggeredSystem {
   }
 }
 
-class ClearSelectedSystem extends TriggeredSystem {
+class InBetweenNavigationSystem extends TriggeredSystem {
   @override
   GroupChangeEvent get event => GroupChangeEvent.addedOrUpdated;
 
   @override
   void executeOnChange() {
+    entityManager.getUniqueEntity<SearchBarTag>().set(SearchTerm(''));
     final selectedNotes = entityManager.group(all: [Selected]);
 
     for (var note in selectedNotes.entities) {
@@ -146,304 +149,353 @@ class ClearSelectedSystem extends TriggeredSystem {
   @override
   EntityMatcher get matcher => EntityMatcher(any: [
         NavigationEvent,
-        PageNavigationTag,
-        DeleteNotesEvent,
+        PageIndex,
+        DiscardSelectedEvent,
         ArchiveNotesEvent,
-        RestoreNotesEvent
+        RestoreNotesEvent,
+        RefreshDatabaseEvent
       ]);
 }
 
-class LoadUserSettingsSystem extends TriggeredSystem {
-  final Color _defaultThemeColor = Colors.purple;
-  final bool _defaultDarkMode = true;
-
+class UserSettingsSystem extends TriggeredSystem {
   @override
-  GroupChangeEvent get event => GroupChangeEvent.addedOrUpdated;
-
-  @override
-  void executeOnChange() async {
-    final dbClient = entityManager.getUnique<DatabaseService>()?.value;
-    if (dbClient == null) {
-      return;
-    }
-
-    final settingsStore = StoreRef.main();
-    final themeColor = Color(
-        await settingsStore.record('themeColor')?.get(dbClient) ??
-            _defaultThemeColor.value);
-    final darkMode = await settingsStore.record('darkMode').get(dbClient) ??
-        _defaultDarkMode;
-
-    entityManager.getUniqueEntity<AppSettingsTag>()
-      ..set(ThemeColor(themeColor))
-      ..set(DarkMode(value: darkMode));
-
-    entityManager
-        .getUniqueEntity<SplashScreenTag>()
-        .update<Counter>((old) => Counter(old.value + 25));
-    entityManager.setUnique(RefreshNotesEvent());
-  }
-
-  @override
-  EntityMatcher get matcher => EntityMatcher(all: [LoadUserSettingsEvent]);
-}
-
-class PersistUserSettingsSystem extends TriggeredSystem implements ExitSystem {
-  @override
-  GroupChangeEvent get event => GroupChangeEvent.updated;
+  GroupChangeEvent get event => GroupChangeEvent.added;
 
   @override
   void executeOnChange() {
-    persistUserSettings();
+    if (entityManager.getUnique<PersistUserSettingsEvent>() != null) {
+      //print('persist');
+      return persistUserSettings();
+    } else if (entityManager.getUnique<LoadUserSettingsEvent>() != null) {
+      //print('load');
+      return loadUserSettings();
+    } else if (entityManager.getUnique<ChangeLocaleEvent>() != null) {
+      //print('locale');
+      return changeLocale();
+    }
   }
 
-  @override
-  void exit() {
-    persistUserSettings();
+  void changeLocale() {
+    final localeCode = entityManager.getUnique<ChangeLocaleEvent>().localeCode;
+    entityManager
+      ..removeUnique<ChangeLocaleEvent>()
+      ..getUniqueEntity<AppSettingsTag>()
+          .set(localeCode == 'en' ? Localization.en() : Localization.ptBR());
   }
 
-  void persistUserSettings() {
+  void loadUserSettings() async {
+    //entityManager.getUniqueEntity<AppSettingsTag>().set(_defaultLocalization);
+
+    final settingsStore = !Hive.isBoxOpen('settings ')
+        ? await Hive.openBox('settings',
+            compactionStrategy: (_, deletedEntries) => deletedEntries > 5)
+        : Hive.box('settings');
+    final darkTheme = settingsStore.get('darkTheme') ?? false;
+
+    entityManager
+        .getUniqueEntity<AppSettingsTag>()
+        .set(AppTheme(darkTheme ? DarkTheme() : LightTheme()));
+
+    SystemChrome.setSystemUIOverlayStyle(SystemUiOverlayStyle(
+      statusBarColor: darkTheme ? BaseTheme.darkestGrey : Colors.white,
+    ));
+
+    entityManager.removeUnique<LoadUserSettingsEvent>();
+
+    await Future.delayed(
+        Duration(milliseconds: 250),
+        () =>
+            entityManager.setUnique(NavigationEvent.replace(Routes.showNotes)));
+  }
+
+  void persistUserSettings() async {
     final userSettings = entityManager.getUniqueEntity<AppSettingsTag>();
 
-    if (userSettings == null) {
-      return;
-    }
+    final settingsStore = !Hive.isBoxOpen('settings ')
+        ? await Hive.openBox('settings',
+            compactionStrategy: (_, deletedEntries) => deletedEntries > 5)
+        : Hive.box('settings');
+    final darkTheme =
+        userSettings.get<AppTheme>().value.brightness == Brightness.dark;
 
-    final dbClient = entityManager.getUnique<DatabaseService>()?.value;
-    if (dbClient == null) {
-      return;
-    }
+    await settingsStore.put('darkTheme', darkTheme);
 
-    final settingsStore = StoreRef.main();
-    final themeColor = userSettings.get<ThemeColor>().value;
-    final darkMode = userSettings.get<DarkMode>().value;
+    SystemChrome.setSystemUIOverlayStyle(SystemUiOverlayStyle(
+      statusBarColor: darkTheme ? BaseTheme.darkestGrey : Colors.white,
+    ));
 
-    settingsStore
-        .record('themeColor')
-        .put(dbClient, themeColor.value, merge: true);
-    settingsStore.record('darkMode').put(dbClient, darkMode, merge: true);
+    entityManager.removeUnique<PersistUserSettingsEvent>();
   }
 
   @override
-  EntityMatcher get matcher => Matchers.settings.extend(any: [DatabaseService]);
+  EntityMatcher get matcher => EntityMatcher(any: [
+        PersistUserSettingsEvent,
+        LoadUserSettingsEvent,
+        ChangeLocaleEvent
+      ]);
 }
 
-class DatabaseSystem extends TriggeredSystem implements InitSystem {
+class BackupSystem extends TriggeredSystem {
   @override
-  void init() => setupDatabase();
+  GroupChangeEvent get event => GroupChangeEvent.added;
 
-  void setupDatabase() async {
-    final status =
-        await Permission.getPermissionsStatus([PermissionName.Storage]);
+  final backupPath = '/storage/emulated/0/backup.json';
 
-    if (status.first.permissionStatus == PermissionStatus.deny ||
-        status.first.permissionStatus == PermissionStatus.notDecided) {
-      entityManager.setUnique(NavigationEvent.replace(Routes.errorPage));
-      return;
+  void exportBackup() {
+    final mapFile = File(backupPath);
+    final noteGroup = entityManager.groupMatching(Matchers.note);
+    final reminderGroup = entityManager.groupMatching(Matchers.reminder);
+    try {
+      final notes = noteGroup.entities;
+      final reminders = reminderGroup.entities;
+      final settings = entityManager.getUniqueEntity<AppSettingsTag>();
+      final map = <String, dynamic>{};
+
+      map['notes'] = notes
+          .map((e) => {
+                'contents': e.get<Contents>().value,
+                'timestamp': e.get<Timestamp>().value.toIso8601String(),
+                'tags': e.get<Tags>()?.value?.toList() ?? [],
+                'todo': e
+                        .get<Todo>()
+                        ?.value
+                        ?.map((item) => item.toJson())
+                        ?.toList() ??
+                    [],
+                'archived': e.hasT<Archived>(),
+                'picFile': e.get<Picture>()?.value?.path
+              })
+          .toList();
+
+      map['reminders'] = reminders
+          .map((e) => {
+                'contents': e.get<Contents>().value,
+                'timestamp': e.get<Timestamp>().value.toIso8601String(),
+                'priority': e.get<Priority>()?.value?.index ?? 0,
+                'completed': e.hasT<Toggle>()
+              })
+          .toList();
+
+      map['settings'] = {
+        'darkTheme':
+            settings.get<AppTheme>().value.brightness == Brightness.dark,
+      };
+
+      mapFile.writeAsStringSync(jsonEncode(map));
+    } on FileSystemException catch (e) {
+      print(e);
+    } finally {
+      final localization =
+          entityManager.getUniqueEntity<AppSettingsTag>().get<Localization>();
+      entityManager.getUniqueEntity<DisplayStatusTag>()
+        ..set(Contents(localization.exportedAlert))
+        ..set(WaitForUser())
+        ..set(Toggle());
     }
-
-    final path = (await getExternalStorageDirectory()).path;
-    final db = await databaseFactoryIo.openDatabase('$path/notes.db');
-
-    entityManager.setUnique(DatabaseService(db));
-    entityManager
-        .getUniqueEntity<SplashScreenTag>()
-        .update<Counter>((old) => Counter(old.value + 25));
-    entityManager.setUnique(LoadUserSettingsEvent());
   }
 
-  @override
-  GroupChangeEvent get event => GroupChangeEvent.addedOrUpdated;
+  void importBackup() {
+    final backupFile = File(backupPath);
 
-  @override
-  void executeOnChange() => setupDatabase();
-
-  @override
-  EntityMatcher get matcher => EntityMatcher(all: [SetupDatabaseEvent]);
-}
-
-class ExportNotesSystem extends TriggeredSystem {
-  @override
-  GroupChangeEvent get event => GroupChangeEvent.addedOrUpdated;
-
-  @override
-  void executeOnChange() async {
-    final path = (await getExternalStorageDirectory()).path;
-    final dbFile = File('$path/notes.db');
-    final localization =
-        entityManager.getUniqueEntity<AppSettingsTag>().get<Localization>();
-
-    if (dbFile.existsSync()) {
-      const newPath = '/storage/emulated/0/notesBkp.db';
+    if (backupFile.existsSync()) {
       try {
-        dbFile.copySync(newPath);
-        entityManager.getUniqueEntity<DisplayStatusTag>()
-          ..set(Contents(localization.exportMessage))
-          ..set(Toggle());
-      } on FileSystemException catch (e) {
-        print(e);
-      }
-    }
-  }
+        final Map<String, dynamic> map =
+            jsonDecode(backupFile.readAsStringSync() ?? '{}');
+        final snapshotData = Map<String, dynamic>.from(map);
 
-  @override
-  EntityMatcher get matcher => EntityMatcher(all: [ExportNotesEvent]);
-}
+        final tagMap = entityManager.groupMatching(Matchers.tag);
 
-class ImportNotesSystem extends TriggeredSystem {
-  @override
-  GroupChangeEvent get event => GroupChangeEvent.addedOrUpdated;
+        final darkTheme = snapshotData['settings']['darkTheme'] ?? false;
 
-  @override
-  void executeOnChange() async {
-    const path = '/storage/emulated/0';
-    const dbBkpPath = '$path/notesBkp.db';
-    final bkpEntityManager = EntityManager();
-    final localization =
-        entityManager.getUniqueEntity<AppSettingsTag>().get<Localization>();
+        entityManager
+            .getUniqueEntity<AppSettingsTag>()
+            .set(AppTheme(darkTheme ? DarkTheme() : LightTheme()));
 
-    if (File(dbBkpPath).existsSync()) {
-      try {
-        final dbBkp = await databaseFactoryIo.openDatabase(dbBkpPath);
-        final bkpNoteStore = intMapStoreFactory.store('notes');
+        for (final noteData in snapshotData['notes']) {
+          final noteEntity = entityManager.createEntity();
 
-        final snapshots = await bkpNoteStore.query().getSnapshots(dbBkp);
-
-        entityManager.getUniqueEntity<DisplayStatusTag>()
-          ..set(Contents(localization.importingAlert))
-          ..set(Toggle());
-
-        for (var snapshot in snapshots
-          ..sort((s1, s2) {
-            final date1 = DateTime.parse(s1.value['timestamp']);
-            final date2 = DateTime.parse(s2.value['timestamp']);
-
-            return date1.compareTo(date2);
-          })) {
-          final snapshotData = snapshot.value;
-
-          final noteEntity = bkpEntityManager.createEntity()
-            ..set(Contents(snapshotData['contents']))
-            ..set(Timestamp(snapshotData['timestamp']))
-            ..set(DatabaseKey(snapshot.key));
-
-          if (snapshotData['tags'] != null) {
-            final tags = snapshotData['tags'].cast<String>();
-            noteEntity.set(Tags(
-                tags.where((tag) => tag is String && tag.isNotEmpty).toList()));
-          }
-
-          if (snapshot['isList'] == true) {
-            final List<Map<String, dynamic>> data =
-                snapshot['listItems'].cast<Map<String, dynamic>>();
-            noteEntity.set(Todo(
-                value: data.map((json) => ListItem.fromJson(json)).toList()));
-          }
-
-          if (snapshot['picFile'] != null) {
-            if (File(snapshot['picFile']).existsSync())
-              noteEntity.set(Picture(snapshot['picFile']));
-          }
-
-          if (snapshot['archived'] == true) {
-            noteEntity.set(Archived());
-          }
+          _populateNote(entityManager, noteEntity, tagMap,
+              Map<String, dynamic>.from(noteData));
         }
 
-        await dbBkp.close();
+        for (final reminderData in snapshotData['reminders']) {
+          final reminderEntity = entityManager.createEntity();
+
+          _populateReminder(entityManager, reminderEntity,
+              Map<String, dynamic>.from(reminderData));
+        }
       } on FileSystemException catch (e) {
         print(e);
       } finally {
-        for (final note in bkpEntityManager.entities) {
-          entityManager.createEntity()
-            ..set(note.get<Contents>())
-            ..set(note.get<Timestamp>())
-            ..set(note.get<Todo>())
-            ..set(note.get<Tags>())
-            ..set(note.get<Picture>())
-            ..set(note.get<DatabaseKey>())
-            ..set(PersistMe());
-        }
+        final noteGroup = entityManager.groupMatching(Matchers.note
+            .copyWith(all: [Contents, Timestamp], none: [DatabaseKey]));
+        final reminderGroup = entityManager.groupMatching(Matchers.note
+            .copyWith(
+                all: [Contents, Timestamp, Priority], none: [DatabaseKey]));
+
+        for (final e in [...noteGroup.entities, ...reminderGroup.entities])
+          e.set(PersistMe());
+
+        entityManager.setUnique(PersistUserSettingsEvent());
+
+        final localization =
+            entityManager.getUniqueEntity<AppSettingsTag>().get<Localization>();
+        entityManager.getUniqueEntity<DisplayStatusTag>()
+          ..set(Contents(localization.importedAlert))
+          ..set(WaitForUser())
+          ..set(Toggle());
       }
     }
   }
-
-  @override
-  EntityMatcher get matcher => EntityMatcher(all: [ImportNotesEvent]);
-}
-
-class LoadNotesSystem extends TriggeredSystem {
-  @override
-  GroupChangeEvent get event => GroupChangeEvent.addedOrUpdated;
 
   @override
   void executeOnChange() async {
-    final dbClient = entityManager.getUnique<DatabaseService>()?.value;
+    if (entityManager.getUnique<ImportNotesEvent>() != null)
+      importBackup();
+    else if (entityManager.getUnique<ExportNotesEvent>() != null)
+      exportBackup();
 
-    if (dbClient == null) {
-      return;
-    }
-
-    final noteStore = intMapStoreFactory.store('notes');
-    final snapshots = await noteStore.query().getSnapshots(dbClient);
-
-    //Destroy currently loaded note entities to avoid duplicates.
-    entityManager.groupMatching(Matchers.note).destroyAllEntities();
-    entityManager.groupMatching(Matchers.archived).destroyAllEntities();
-
-    final splashScreen = entityManager.getUniqueEntity<SplashScreenTag>();
-    final endCount = snapshots.length;
-    var count = 0;
-
-    for (var snapshot in snapshots
-      ..sort((s1, s2) {
-        final date1 = DateTime.parse(s1.value['timestamp']);
-        final date2 = DateTime.parse(s2.value['timestamp']);
-
-        return date2.compareTo(date1);
-      })) {
-      final snapshotData = snapshot.value;
-
-      //Create a new Note entity using the loaded data.
-      final noteEntity = entityManager.createEntity()
-        ..set(Contents(snapshotData['contents']))
-        ..set(Timestamp(snapshotData['timestamp']))
-        ..set(DatabaseKey(snapshot.key));
-
-      final List<String> tags = snapshotData['tags'].cast<String>();
-
-      if (tags.isNotEmpty) {
-        noteEntity.set(Tags(tags.toList()));
-      }
-
-      final List<Map<String, dynamic>> todo =
-          snapshot['todo']?.cast<Map<String, dynamic>>();
-
-      if (todo.isNotEmpty) {
-        noteEntity.set(
-            Todo(value: todo.map((json) => ListItem.fromJson(json)).toList()));
-      }
-
-      if (snapshot['picFile'] != null)
-        noteEntity.set(Picture(snapshot['picFile']));
-
-      if (snapshot['archived'] == true) {
-        noteEntity.set(Archived());
-      }
-
-      splashScreen.update<Counter>(
-          (old) => Counter(old.value + ((++count / endCount) * 50).truncate()));
-    }
-
-    splashScreen.set(Counter(100));
-    entityManager.setUnique(NavigationEvent.replace(Routes.showNotes));
+    entityManager
+      ..removeUnique<ImportNotesEvent>()
+      ..removeUnique<ExportNotesEvent>();
   }
 
   @override
-  EntityMatcher get matcher => EntityMatcher(all: [RefreshNotesEvent]);
+  EntityMatcher get matcher =>
+      EntityMatcher(any: [ImportNotesEvent, ExportNotesEvent]);
 }
 
-class PersistNoteSystem extends ReactiveSystem {
+class DatabaseSystem extends TriggeredSystem implements InitSystem {
+  EntityGroup tagMap, noteMap, reminderMap;
+  StreamSubscription reminderListener, noteListener;
+
+  @override
+  GroupChangeEvent get event => GroupChangeEvent.added;
+
+  void setupDatabase() async {
+    if (Platform.isAndroid || Platform.isIOS) {
+      final status =
+          await Permission.getPermissionsStatus([PermissionName.Storage]);
+
+      if (status.first.permissionStatus == PermissionStatus.deny ||
+          status.first.permissionStatus == PermissionStatus.notDecided ||
+          status.first.permissionStatus == PermissionStatus.notAgain) {
+        final status =
+            (await Permission.requestPermissions([PermissionName.Storage]))
+                .first
+                .permissionStatus;
+
+        if (status != PermissionStatus.allow) return;
+      }
+    }
+
+    final path = await _getValidPath();
+    Hive.init(path);
+
+    entityManager
+      ..removeUnique<SetupDatabaseEvent>()
+      ..setUnique(StoragePermission())
+      ..setUnique(LoadUserSettingsEvent())
+      ..setUnique(RefreshDatabaseEvent());
+  }
+
+  void refreshReminders() async {
+    final reminderStore = !Hive.isBoxOpen('reminders')
+        ? await Hive.openBox('reminders', compactionStrategy: _compactIf)
+        : Hive.box('reminders');
+    final snapshots = reminderStore.toMap();
+
+    for (final snapshot in snapshots.entries) {
+      final snapshotData = Map<String, dynamic>.from(snapshot.value);
+      final reminderEntity = entityManager.createEntity()
+        ..set(DatabaseKey(snapshot.key));
+
+      _populateReminder(entityManager, reminderEntity, snapshotData);
+    }
+
+    await reminderListener?.cancel();
+    reminderListener = reminderStore.watch().listen(updateReminders);
+  }
+
+  void updateReminders(BoxEvent event) {
+    final reminderEntity = KtList.from(reminderMap.entities)
+            .singleOrNull((e) => e.get<DatabaseKey>().value == event.key) ??
+        entityManager.createEntity()
+      ..set(DatabaseKey(event.key));
+
+    //print('${reminderEntity.get<DatabaseKey>().value} ${event.key}');
+
+    if (event.deleted) {
+      reminderEntity.destroy();
+    } else {
+      final snapshotData = Map<String, dynamic>.from(event.value);
+
+      _populateReminder(entityManager, reminderEntity, snapshotData);
+    }
+  }
+
+  void updateNotes(BoxEvent event) {
+    final noteEntity = KtList.from(noteMap.entities)
+            .singleOrNull((e) => e.get<DatabaseKey>().value == event.key) ??
+        entityManager.createEntity()
+      ..set(DatabaseKey(event.key));
+
+    //print('${noteEntity.get<DatabaseKey>().value} ${event.key}');
+
+    if (event.deleted) {
+      noteEntity.destroy();
+    } else {
+      final snapshotData = Map<String, dynamic>.from(event.value);
+
+      _populateNote(entityManager, noteEntity, tagMap, snapshotData);
+    }
+  }
+
+  void refreshNotes() async {
+    final noteStore = !Hive.isBoxOpen('notes')
+        ? await Hive.openBox('notes', compactionStrategy: _compactIf)
+        : Hive.box('notes');
+    final snapshot = noteStore.toMap();
+
+    for (final snapshot in snapshot.entries) {
+      final snapshotData = Map<String, dynamic>.from(snapshot.value);
+      final noteEntity = entityManager.createEntity()
+        ..set(DatabaseKey(snapshot.key));
+
+      _populateNote(entityManager, noteEntity, tagMap, snapshotData);
+    }
+
+    await noteListener?.cancel();
+    noteListener = noteStore.watch().listen(updateNotes);
+  }
+
+  @override
+  void executeOnChange() {
+    if (entityManager.getUnique<StoragePermission>() == null &&
+        entityManager.getUnique<SetupDatabaseEvent>() != null) {
+      return setupDatabase();
+    }
+
+    refreshNotes();
+    refreshReminders();
+    entityManager.removeUnique<RefreshDatabaseEvent>();
+  }
+
+  @override
+  EntityMatcher get matcher =>
+      EntityMatcher(any: [SetupDatabaseEvent, RefreshDatabaseEvent]);
+
+  @override
+  void init() {
+    tagMap = entityManager.groupMatching(Matchers.tag);
+    noteMap = entityManager.groupMatching(Matchers.note);
+    reminderMap = entityManager.groupMatching(Matchers.reminder);
+
+    setupDatabase();
+  }
+}
+
+class PersistanceSystem extends ReactiveSystem {
   @override
   GroupChangeEvent get event => GroupChangeEvent.addedOrUpdated;
 
@@ -451,115 +503,100 @@ class PersistNoteSystem extends ReactiveSystem {
   EntityMatcher get matcher => EntityMatcher(all: [PersistMe]);
 
   @override
-  void executeWith(List<Entity> entities) async {
-    final dbClient = entityManager.getUnique<DatabaseService>()?.value;
-
-    if (dbClient == null) {
+  void executeWith(List<ObservableEntity> entities) async {
+    if (Hive.path == null) {
       return;
     }
 
-    for (var note in entities) {
-      final contents = note.get<Contents>().value;
-      final tags = note.get<Tags>()?.value ?? [];
-      final items = note.get<Todo>()?.value ?? [];
-      final picFile = note.get<Picture>()?.value;
+    for (var e in entities) {
+      final contents = e.get<Contents>()?.value;
+      final tags = e.get<Tags>()?.value ?? [];
+      final items = e.get<Todo>()?.value ?? [];
+      final dbKey = e.get<PersistMe>()?.key;
+      final picFile = e.get<Picture>()?.value?.path;
+      final date = e.get<Timestamp>()?.value ?? DateTime.now();
+      final priority = e.get<Priority>()?.value;
+      final archived = e.hasT<Archived>();
+      final completed = e.hasT<Toggle>();
 
-      final data = {
-        'contents': contents,
-        'tags': tags.where((value) => value.isNotEmpty).toList(),
-        'todo': items
-            .where((item) => item.label.isNotEmpty)
-            .map((item) => item.toJson())
-            .toList(),
-        'timestamp': DateTime.now().toIso8601String()
-      };
-      if (picFile != null) {
-        data['picFile'] = picFile.path;
+      e.destroy();
+
+      if (priority != null) {
+        final reminderStore = !Hive.isBoxOpen('reminders')
+            ? await Hive.openBox('reminders', compactionStrategy: _compactIf)
+            : Hive.box('reminders');
+
+        final reminder = {
+          'contents': contents,
+          'timestamp': date.toIso8601String(),
+          'priority': priority.index,
+          'completed': completed
+        };
+
+        if (dbKey != null)
+          await reminderStore.put(dbKey, reminder);
+        else
+          await reminderStore.add(reminder);
+        continue;
       }
-      final noteStore = intMapStoreFactory.store('notes');
-      await dbClient.transaction((tx) async {
-        await noteStore.add(tx, data);
-      }).catchError(print);
+
+      final note = <String, dynamic>{
+        'contents': contents,
+        'timestamp': date.toIso8601String(),
+      };
+
+      note['archived'] = archived;
+
+      note['tags'] = tags.toList();
+
+      note['todo'] = items
+          .where((item) => item.label.isNotEmpty)
+          .map((item) => item.toJson())
+          .toList();
+
+      note['picFile'] = picFile;
+
+      final noteStore = !Hive.isBoxOpen('notes')
+          ? await Hive.openBox('notes', compactionStrategy: _compactIf)
+          : Hive.box('notes');
+      if (dbKey != null)
+        await noteStore.put(dbKey, note);
+      else
+        await noteStore.add(note);
     }
-    entityManager.setUnique(RefreshNotesEvent());
   }
 }
 
-class UpdateNoteSystem extends ReactiveSystem {
+class DiscardSystem extends TriggeredSystem {
   @override
   GroupChangeEvent get event => GroupChangeEvent.addedOrUpdated;
 
   @override
-  void executeWith(List<Entity> entities) async {
-    final dbClient = entityManager.getUnique<DatabaseService>()?.value;
-
-    if (dbClient == null) {
-      return;
-    }
-
-    for (var note in entities) {
-      final contents = note.get<Contents>().value;
-      final tags = note.get<Tags>()?.value ?? [];
-      final items = note.get<Todo>()?.value ?? [];
-      final dbKey = note.get<DatabaseKey>().value;
-      final picFile = note.get<Picture>()?.value;
-
-      final data = {
-        'contents': contents,
-        'tags': tags.where((value) => value.isNotEmpty).toList(),
-        'todo': items
-            .where((item) => item.label.isNotEmpty)
-            .map((item) => item.toJson())
-            .toList(),
-        'timestamp': DateTime.now().toIso8601String()
-      };
-
-      if (picFile != null) {
-        data['picFile'] = picFile.path;
-      }
-      final noteStore = intMapStoreFactory.store('notes');
-      await dbClient.transaction((tx) async {
-        await noteStore.record(dbKey).update(tx, data);
-      }).catchError(print);
-    }
-    entityManager.setUnique(RefreshNotesEvent());
-  }
-
-  @override
-  EntityMatcher get matcher => EntityMatcher(all: [UpdateMe]);
-}
-
-class DeleteNotesSystem extends TriggeredSystem {
-  @override
-  GroupChangeEvent get event => GroupChangeEvent.addedOrUpdated;
-
-  @override
-  EntityMatcher get matcher => EntityMatcher(all: [DeleteNotesEvent]);
+  EntityMatcher get matcher => EntityMatcher(all: [DiscardSelectedEvent]);
 
   @override
   void executeOnChange() async {
-    final dbClient = entityManager.getUnique<DatabaseService>()?.value;
-
-    if (dbClient == null) {
+    if (Hive.path == null) {
       return;
     }
 
-    final selectedNotes = entityManager.group(all: [Selected]);
+    final selected = entityManager.group(any: [Selected]);
 
-    if (selectedNotes.isEmpty) {
+    if (selected.isEmpty) {
       return;
     }
 
-    for (var note in selectedNotes.entities) {
-      final dbKey = note.get<DatabaseKey>().value;
+    for (var e in selected.entities) {
+      final dbKey = e.get<DatabaseKey>().value;
+      final priority = e.get<Priority>()?.value;
+      final name = priority != null ? 'reminders' : 'notes';
 
-      final noteStore = intMapStoreFactory.store('notes');
-      await dbClient.transaction((tx) async {
-        await noteStore.record(dbKey).delete(tx);
-      }).catchError(print);
+      final store =
+          !Hive.isBoxOpen(name) ? Hive.box(name) : await Hive.openBox(name);
+      await store.deleteAll([dbKey]);
 
-      if (note.hasT<Picture>()) {
-        final file = note.get<Picture>().value;
+      if (e.hasT<Picture>()) {
+        final file = e.get<Picture>().value;
 
         try {
           file.deleteSync();
@@ -568,25 +605,41 @@ class DeleteNotesSystem extends TriggeredSystem {
         }
       }
     }
-
-    entityManager
-      ..removeUnique<DeleteNotesEvent>()
-      ..setUnique(RefreshNotesEvent());
   }
 }
 
-class ArchiveNotesSystem extends TriggeredSystem {
+class ReminderOperationsSystem extends TriggeredSystem {
+  @override
+  GroupChangeEvent get event => GroupChangeEvent.addedOrUpdated;
+
+  @override
+  EntityMatcher get matcher => EntityMatcher(all: [CompleteRemindersEvent]);
+
+  @override
+  void executeOnChange() async {
+    final selected = entityManager.group(all: [Selected]);
+
+    if (selected.isEmpty) {
+      return;
+    }
+
+    for (var e in selected.entities) {
+      e..set(Toggle())..set(PersistMe(e.get<DatabaseKey>()?.value));
+    }
+  }
+}
+
+class NoteOperationsSystem extends TriggeredSystem {
   @override
   GroupChangeEvent get event => GroupChangeEvent.added;
 
   @override
-  EntityMatcher get matcher => EntityMatcher(all: [ArchiveNotesEvent]);
+  EntityMatcher get matcher =>
+      EntityMatcher(any: [ArchiveNotesEvent, RestoreNotesEvent]);
 
   @override
   void executeOnChange() async {
-    final dbClient = entityManager.getUnique<DatabaseService>()?.value;
-
-    if (dbClient == null) {
+    if (Hive.path == null) {
       return;
     }
 
@@ -597,56 +650,72 @@ class ArchiveNotesSystem extends TriggeredSystem {
     }
 
     for (var note in selectedNotes.entities) {
-      final dbKey = note.get<DatabaseKey>()?.value;
-      if (dbKey == null) {
-        continue;
-      }
-      final noteStore = intMapStoreFactory.store('notes');
-      await dbClient.transaction((tx) async {
-        await noteStore.record(dbKey).update(tx, {'archived': true});
-      });
+      if (entityManager.getUnique<ArchiveNotesEvent>() != null)
+        note.set(Archived());
+      else if (entityManager.getUnique<RestoreNotesEvent>() != null)
+        note.remove<Archived>();
+
+      note
+        ..set(PersistMe(note.get<DatabaseKey>().value))
+        ..remove<Selected>();
     }
 
     entityManager
       ..removeUnique<ArchiveNotesEvent>()
-      ..setUnique(RefreshNotesEvent());
+      ..removeUnique<RestoreNotesEvent>();
   }
 }
 
-class RestoreNotesSystem extends TriggeredSystem {
-  @override
-  GroupChangeEvent get event => GroupChangeEvent.added;
+Future<String> _getValidPath() async {
+  if (Platform.isFuchsia || Platform.isWindows || Platform.isLinux)
+    return './Files/';
+  else
+    return (await getExternalStorageDirectory()).path;
+}
 
-  @override
-  EntityMatcher get matcher => EntityMatcher(all: [RestoreNotesEvent]);
+bool _compactIf(int entries, int deletedEntries) => deletedEntries > 50;
 
-  @override
-  void executeOnChange() async {
-    final dbClient = entityManager.getUnique<DatabaseService>()?.value;
+void _populateReminder(EntityManager entityManager, Entity reminderEntity,
+    Map<String, dynamic> snapshotData) {
+  reminderEntity
+    ..set(Contents(snapshotData['contents']))
+    ..set(Timestamp(snapshotData['timestamp']))
+    ..set(Priority(ReminderPriority.values[snapshotData['priority']]))
+    ..set(snapshotData['completed'] == true ? Toggle() : null);
+}
 
-    if (dbClient == null) {
-      return;
-    }
+void _populateNote(EntityManager entityManager, Entity noteEntity,
+    EntityGroup tagMap, Map<String, dynamic> snapshotData) {
+  noteEntity
+    ..set(Contents(snapshotData['contents']))
+    ..set(Timestamp(snapshotData['timestamp']));
 
-    final selectedNotes = entityManager.group(all: [Selected]);
+  final List<String> tagItems = List<String>.from(snapshotData['tags']);
+  final noteTags =
+      KtList<String>.from(tagItems ?? <String>[]).map((tag) => tag.trim());
+  final tags = KtList<ObservableEntity>.from(tagMap.entities);
 
-    if (selectedNotes.isEmpty) {
-      return;
-    }
+  noteEntity.set(Tags(noteTags.asList()));
 
-    for (var note in selectedNotes.entities) {
-      final dbKey = note.get<DatabaseKey>()?.value;
-      if (dbKey == null) {
-        continue;
-      }
-      final noteStore = intMapStoreFactory.store('notes');
-      await dbClient.transaction((tx) async {
-        await noteStore.record(dbKey).update(tx, {'archived': false});
-      });
-    }
+  for (var noteTag in noteTags.iter) {
+    if (tags.none((e) => e.get<TagData>().value == noteTag))
+      entityManager.createEntity().set(TagData(noteTag));
+  }
 
-    entityManager
-      ..removeUnique<RestoreNotesEvent>()
-      ..setUnique(RefreshNotesEvent());
+  final List<Map<String, dynamic>> todoItems = List.from(snapshotData['todo'])
+      .map((data) => Map<String, dynamic>.from(data))
+      .toList();
+  final todo = List<Map<String, dynamic>>.from(todoItems)
+      .map((item) => Map<String, dynamic>.from(item))
+      .toList();
+
+  noteEntity
+      .set(Todo(value: todo.map((json) => ListItem.fromJson(json)).toList()));
+
+  if (snapshotData['picFile'] != null)
+    noteEntity.set(Picture(snapshotData['picFile']));
+
+  if (snapshotData['archived'] != null && snapshotData['archived'] == true) {
+    noteEntity.set(Archived());
   }
 }

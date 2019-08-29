@@ -16,6 +16,8 @@ class ArchivePage extends StatelessWidget {
   Widget build(BuildContext context) {
     final localization =
         entityManager.getUniqueEntity<AppSettingsTag>().get<Localization>();
+    final appTheme =
+        entityManager.getUniqueEntity<AppSettingsTag>().get<AppTheme>().value;
 
     return GroupObservingWidget(
         matcher: Matchers.archived,
@@ -36,43 +38,69 @@ class ArchivePage extends StatelessWidget {
             notesByDate[DateTime.now()] = [];
           }
 
-          return CustomScrollView(
-            primary: true,
-            slivers: <Widget>[
-              for (final noteGroup in notesByDate.entries) ...[
-                SliverToBoxAdapter(
-                    child: noteGroup.value.isNotEmpty
-                        ? CheckboxListTile(
-                            controlAffinity: ListTileControlAffinity.leading,
-                            title: Text(formatTimestamp(
-                                noteGroup.key, localization,
-                                includeDay: false, includeWeekDay: false)),
-                            value: noteGroup.value
-                                    .where((e) => e.hasT<Selected>())
-                                    .length ==
-                                noteGroup.value.length,
-                            onChanged: (value) {
-                              if (value) {
-                                for (final note in noteGroup.value)
-                                  note.set(Selected());
-                              } else {
-                                for (final note in noteGroup.value)
-                                  note.remove<Selected>();
-                              }
-                            },
-                          )
-                        : ListTile(
-                            title: Text(formatTimestamp(
-                                noteGroup.key, localization,
-                                includeDay: false, includeWeekDay: false)),
-                          )),
-                buildNotesSliverGridView(
-                    noteGroup.value,
-                    buildNoteCard,
-                    localization.emptyArchiveHint,
-                    [],
-                    localization.defaultHelpTags)
-              ]
+          return Stack(
+            children: <Widget>[
+              if (notesList.isEmpty)
+                Center(
+                  child: RichText(
+                    textWidthBasis: TextWidthBasis.longestLine,
+                    text: TextSpan(
+                        text: '${localization.emptyArchiveHintTitle}\n',
+                        style: appTheme.titleTextStyle,
+                        children: [
+                          TextSpan(
+                              text: localization.emptyArchiveHintSubtitle,
+                              style: appTheme.subtitleTextStyle)
+                        ]),
+                  ),
+                )
+              else
+                ListView(
+                  primary: true,
+                  physics: BouncingScrollPhysics(),
+                  key: PageStorageKey('archivedScroll'),
+                  children: <Widget>[
+                    for (final noteGroup in notesByDate.entries) ...[
+                      noteGroup.value.isNotEmpty
+                          ? CheckboxListTile(
+                              dense: true,
+                              activeColor: appTheme.primaryButtonColor,
+                              checkColor: appTheme.buttonIconColor,
+                              controlAffinity: ListTileControlAffinity.leading,
+                              title: Text(
+                                formatTimestamp(noteGroup.key, localization,
+                                    includeDay: false, includeWeekDay: false),
+                                style: appTheme.titleTextStyle,
+                              ),
+                              value: noteGroup.value
+                                      .where((e) => e.hasT<Selected>())
+                                      .length ==
+                                  noteGroup.value.length,
+                              onChanged: (value) {
+                                if (value) {
+                                  for (final note in noteGroup.value)
+                                    note.set(Selected());
+                                } else {
+                                  for (final note in noteGroup.value)
+                                    note.remove<Selected>();
+                                }
+                              },
+                            )
+                          : ListTile(
+                              dense: true,
+                              title: Text(
+                                formatTimestamp(noteGroup.key, localization,
+                                    includeDay: false, includeWeekDay: false),
+                                style: appTheme.titleTextStyle,
+                              ),
+                            ),
+                      buildNotesGridView(
+                        noteGroup.value,
+                        buildNoteCard,
+                      ),
+                    ]
+                  ],
+                ),
             ],
           );
         });

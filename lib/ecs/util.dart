@@ -111,16 +111,16 @@ class _GroupObservingListBuilderState extends State<GroupObservingListBuilder>
   }
 
   @override
-  void added(EntityGroup group, Entity entity) {
+  void added(EntityGroup group, ObservableEntity entity) {
     _added = _group.entities.indexOf(entity);
     _update();
   }
 
   @override
-  void removed(EntityGroup group, Entity entity) {}
+  void removed(EntityGroup group, ObservableEntity entity) {}
 
   @override
-  void updated(EntityGroup group, Entity entity) {
+  void updated(EntityGroup group, ObservableEntity entity) {
     _updated = _group.entities.indexOf(entity);
     _update();
   }
@@ -185,18 +185,17 @@ class _GroupObservingGridBuilderState extends State<GroupObservingGridBuilder>
     return GridView.builder(
       primary: false,
       itemCount: groupLength,
+      shrinkWrap: true,
       gridDelegate: widget.delegate,
       itemBuilder: (context, index) => AnimatableEntityObservingWidget(
-        key: ValueKey('GridItem${_group.entities[index].creationIndex}'),
+        key: Key('GridItem${_group.entities[index].creationIndex}'),
         provider: (_) => _group.entities[index],
         startAnimating: true,
         duration: widget.duration,
         tweens: {'_default': Tween<double>(begin: 0.0, end: 1.0)},
         onAnimationEnd: (end) {
           if (!end) {
-            _added = -1;
             _updated = -1;
-            _update();
           }
         },
         builder: (itemEntity, anim, context) {
@@ -224,19 +223,19 @@ class _GroupObservingGridBuilderState extends State<GroupObservingGridBuilder>
   }
 
   @override
-  void added(EntityGroup group, Entity entity) {
-    _added = _group.entities.indexOf(entity);
+  void added(EntityGroup group, ObservableEntity entity) {
+    _added = group.entities.indexOf(entity);
     _update();
   }
 
   @override
-  void removed(EntityGroup group, Entity entity) {
+  void removed(EntityGroup group, ObservableEntity entity) {
     _update();
   }
 
   @override
-  void updated(EntityGroup group, Entity entity) {
-    _updated = _group.entities.indexOf(entity);
+  void updated(EntityGroup group, ObservableEntity entity) {
+    _updated = group.entities.indexOf(entity);
     _update();
   }
 

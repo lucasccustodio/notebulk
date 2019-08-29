@@ -11,7 +11,7 @@ description: A note taking application for your daily needs
 # In iOS, build-name is used as CFBundleShortVersionString while build-number used as CFBundleVersion.
 # Read more about iOS versioning at
 # https://developer.apple.com/library/archive/documentation/General/Reference/InfoPlistKeyReference/Articles/CoreFoundationKeys.html
-version: 1.1.1
+version: 1.2
 
 environment:
   sdk: ">=2.2.2 <3.0.0"
@@ -20,14 +20,21 @@ dependencies:
   flutter:
     sdk: flutter
   entitas_ff:
-    git: https://github.com/lucasccustodio/entitas_ff.git
-  sembast: ^2.0.0+1
+    git: 
+      url: https://github.com/lucasccustodio/entitas_ff.git
+      ref: master
+  #file_chooser:
+    #path: /home/lucascc/Dev/flutter-desktop-embedding/plugins/file_chooser
+  
+  image: ^2.1.4
+  kt_dart: ^0.6.2
+  hive: ^0.4.1+1
   path_provider: ^1.1.2
   tinycolor: ^1.0.2
   permission: ^0.1.2
   image_picker: ^0.6.0+17
   flutter_staggered_grid_view: ^0.3.0
-  shared_preferences: ^0.5.3+4
+  extended_text_field: ^0.4.3
   flutter_localizations:
     sdk: flutter
   
@@ -65,17 +72,20 @@ flutter:
   # list giving the asset and other descriptors for the font. For
   # example:
   fonts:
-    - family: Ubuntu
+    - family: AppIcons
       fonts:
-        - asset: fonts/Ubuntu-Regular.ttf
-        - asset: fonts/Ubuntu-Bold.ttf
-          weight: 700
-    - family: OpenSans
+        - asset: fonts/AppIcons.ttf
+    - family: Palanquin
       fonts:
-        - asset: fonts/OpenSans-Regular.ttf
-        - asset: fonts/OpenSans-Light.ttf
+        - asset: fonts/Palanquin-Regular.ttf
           weight: 400
-        - asset: fonts/OpenSans-Bold.ttf
+        - asset: fonts/Palanquin-Medium.ttf
+          weight: 500
+        - asset: fonts/Palanquin-Bold.ttf
+          weight: 700
+    - family: PalanquinDark
+      fonts:
+        - asset: fonts/PalanquinDark-Bold.ttf
           weight: 700
   #
   # For details regarding fonts from package dependencies,

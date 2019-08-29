@@ -1,38 +1,34 @@
+import 'dart:io';
+
 import 'package:entitas_ff/entitas_ff.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
-import 'package:notebulk/ecs/components.dart';
 import 'package:flutter/rendering.dart';
+import 'package:flutter_localizations/flutter_localizations.dart';
+import 'package:notebulk/ecs/components.dart';
 import 'package:notebulk/ecs/systems.dart';
-import 'package:notebulk/mainApp.dart';
 import 'package:notebulk/features/noteFormFeature.dart';
+import 'package:notebulk/mainApp.dart';
 import 'package:notebulk/pages/splashScreenPage.dart';
 import 'package:notebulk/pages/storageErrorPage.dart';
+import 'package:notebulk/theme.dart';
 import 'package:notebulk/util.dart';
 import 'package:notebulk/widgets/util.dart';
-import 'package:tinycolor/tinycolor.dart';
-import 'package:flutter_localizations/flutter_localizations.dart';
 
-import 'features/testFeature.dart';
+import 'features/eventFormFeature.dart';
 
 void main() async {
-  //debugDefaultTargetPlatformOverride = TargetPlatform.fuchsia;
-  //debugPaintSizeEnabled = true;
+  if (Platform.isLinux || Platform.isWindows || Platform.isFuchsia)
+    debugDefaultTargetPlatformOverride = TargetPlatform.fuchsia;
 
   final mainEntityManager = EntityManager();
 
-  mainEntityManager.setUnique(SplashScreenTag()).set(Counter(0));
   mainEntityManager.setUnique(AppSettingsTag())
-    ..set(ThemeColor(Colors.black))
-    ..set(DarkMode(value: true))
-    ..set(Localization.en());
-  mainEntityManager.setUnique(PageNavigationTag())
-    ..set(CurrentIndex(0))
-    ..set(NextIndex(1));
+    ..set(Localization.en())
+    ..set(AppTheme(BlankTheme()));
   mainEntityManager
     ..setUnique(DisplayStatusTag())
-    ..setUnique(FABTag())
-    ..setUnique(StoragePermission(value: false))
+    ..setUnique(PageIndex(0, oldValue: 0))
     ..setUnique(SearchBarTag());
 
   final navigatorKey = GlobalKey<NavigatorState>();
@@ -41,16 +37,11 @@ void main() async {
     entityManager: mainEntityManager,
     child: EntityObservingWidget(
       provider: (em) => em.getUniqueEntity<AppSettingsTag>(),
-      builder: (themeEntity, context) {
-        final darkMode = themeEntity.get<DarkMode>().value;
-        final primaryColor = themeEntity.get<ThemeColor>().value;
-        final accentColor = darkMode
-            ? TinyColor(primaryColor).brighten().color
-            : TinyColor(primaryColor).darken().color;
+      builder: (settings, context) {
+        final appTheme = settings.get<AppTheme>().value;
 
         return GradientBackground(
-          darkMode: darkMode,
-          themeColor: accentColor,
+          appTheme: appTheme,
           child: MaterialApp(
             debugShowCheckedModeBanner: false,
             debugShowMaterialGrid: false,
@@ -60,10 +51,8 @@ void main() async {
             supportedLocales: const [Locale('en', 'US'), Locale('pt', 'BR')],
             localeResolutionCallback: (locale, _) {
               if (locale != null) {
-                mainEntityManager.getUniqueEntity<AppSettingsTag>().set(
-                    locale.languageCode == 'en'
-                        ? Localization.en()
-                        : Localization.ptBR());
+                mainEntityManager
+                    .setUnique(ChangeLocaleEvent(locale.languageCode));
               }
               return locale;
             },
@@ -76,10 +65,16 @@ void main() async {
               final localization = mainEntityManager
                   .getUniqueEntity<AppSettingsTag>()
                   .get<Localization>();
+              final appTheme = mainEntityManager
+                  .getUniqueEntity<AppSettingsTag>()
+                  .get<AppTheme>();
 
               switch (settings.name) {
                 case Routes.splashScreen:
                   pageWidget = SplashScreenPage();
+                  break;
+                case Routes.errorPage:
+                  pageWidget = StorageErrorPage();
                   break;
                 case Routes.showNotes:
                   pageWidget = MainApp(
@@ -96,9 +91,9 @@ void main() async {
                       rootEntityManager: mainEntityManager,
                       onCreate: (em, root) {
                         em.setUnique(FeatureEntityTag());
-                        em.setUnique(AppSettingsTag()).set(root
-                            .getUniqueEntity<AppSettingsTag>()
-                            .get<Localization>());
+                        em.setUnique(AppSettingsTag())
+                          ..set(localization)
+                          ..set(appTheme);
                       },
                       onDestroy: (em, root) {
                         final note = em.getUniqueEntity<FeatureEntityTag>();
@@ -125,9 +120,9 @@ void main() async {
                         final editNote =
                             root.getUniqueEntity<FeatureEntityTag>();
 
-                        em.setUnique(AppSettingsTag()).set(root
-                            .getUniqueEntity<AppSettingsTag>()
-                            .get<Localization>());
+                        em.setUnique(AppSettingsTag())
+                          ..set(localization)
+                          ..set(appTheme);
 
                         em.setUnique(FeatureEntityTag())
                           ..set(editNote.get<Contents>())
@@ -146,47 +141,88 @@ void main() async {
                             ..set(note.get<Contents>())
                             ..set(note.get<Tags>())
                             ..set(note.get<Todo>())
-                            ..set(note.get<DatabaseKey>())
                             ..set(note.get<Picture>())
-                            ..set(UpdateMe());
+                            ..set(PersistMe(note.get<DatabaseKey>().value));
                       },
                     ),
                   );
                   break;
-                case Routes.errorPage:
-                  pageWidget = StorageErrorPage(
-                    entityManager: mainEntityManager,
-                  );
-                  break;
-                case Routes.testPage:
+                case Routes.createEvent:
                   pageWidget = EntityManagerProvider.feature(
                     system: FeatureSystem(
-                      rootEntityManager: mainEntityManager,
+                        rootEntityManager: mainEntityManager,
+                        onCreate: (em, root) {
+                          em.setUnique(FeatureEntityTag())
+                            ..set(Priority(ReminderPriority.low))
+                            ..set(Timestamp(DateTime.now().toIso8601String()));
+                          em.setUnique(AppSettingsTag())
+                            ..set(localization)
+                            ..set(appTheme);
+                        },
+                        onDestroy: (em, root) {
+                          final note = em.getUniqueEntity<FeatureEntityTag>();
+
+                          if (note.hasT<PersistMe>())
+                            root.createEntity()
+                              ..set(note.get<Contents>())
+                              ..set(note.get<Timestamp>())
+                              ..set(note.get<Priority>())
+                              ..set(PersistMe());
+                        }),
+                    child: EventFormFeature(
+                      title: localization.createEventFeatureTitle,
                     ),
-                    child: TestFeature(),
+                  );
+                  break;
+                case Routes.editEvent:
+                  pageWidget = EntityManagerProvider.feature(
+                    child: EventFormFeature(
+                      title: localization.editEventFeatureTitle,
+                    ),
+                    system: FeatureSystem(
+                      rootEntityManager: mainEntityManager,
+                      onCreate: (em, root) {
+                        final editNote =
+                            root.getUniqueEntity<FeatureEntityTag>();
+
+                        em.setUnique(AppSettingsTag())
+                          ..set(localization)
+                          ..set(appTheme);
+
+                        em.setUnique(FeatureEntityTag())
+                          ..set(editNote.get<Contents>())
+                          ..set(editNote.get<Timestamp>())
+                          ..set(editNote.get<DatabaseKey>())
+                          ..set(editNote.get<Priority>());
+
+                        root.removeUnique<FeatureEntityTag>();
+                      },
+                      onDestroy: (em, root) {
+                        final note = em.getUniqueEntity<FeatureEntityTag>();
+
+                        if (note.hasT<PersistMe>())
+                          root.createEntity()
+                            ..set(note.get<Contents>())
+                            ..set(note.get<Timestamp>())
+                            ..set(note.get<Priority>())
+                            ..set(PersistMe(note.get<DatabaseKey>().value));
+                      },
+                    ),
                   );
                   break;
                 default:
                   pageWidget = Container();
               }
-              return FadeRoute(page: pageWidget);
+              return MaterialPageRoute(
+                  builder: (_) => pageWidget, fullscreenDialog: true);
             },
             theme: ThemeData(
-                fontFamily: 'OpenSans',
-                brightness: darkMode ? Brightness.dark : Brightness.light,
-                primaryColor: primaryColor,
-                accentColor: accentColor,
-                toggleableActiveColor: accentColor,
-                textSelectionColor: accentColor,
-                textSelectionHandleColor: accentColor,
-                appBarTheme: AppBarTheme.of(context).copyWith(
-                    color: Colors.transparent,
-                    elevation: 0,
-                    iconTheme: IconTheme.of(context).copyWith(
-                        color: darkMode ? Colors.white : Colors.black)),
+                brightness: appTheme.brightness,
                 canvasColor: Colors.transparent,
-                backgroundColor: Colors.transparent,
+                splashColor: appTheme.accentColor,
                 scaffoldBackgroundColor: Colors.transparent,
+                textSelectionHandleColor: appTheme.primaryButtonColor,
+                textSelectionColor: appTheme.primaryButtonColor,
                 typography: Typography(
                   englishLike: Typography.englishLike2018,
                   dense: Typography.dense2018,
@@ -199,20 +235,16 @@ void main() async {
     //Define all application systems in use here.
     system: RootSystem(entityManager: mainEntityManager, systems: [
       DatabaseSystem(),
-      LoadUserSettingsSystem(),
-      PersistUserSettingsSystem(),
+      UserSettingsSystem(),
       TickSystem(),
-      ImportNotesSystem(),
-      ExportNotesSystem(),
-      LoadNotesSystem(),
-      PersistNoteSystem(),
-      UpdateNoteSystem(),
-      DeleteNotesSystem(),
-      ArchiveNotesSystem(),
-      RestoreNotesSystem(),
+      BackupSystem(),
+      PersistanceSystem(),
+      DiscardSystem(),
+      ReminderOperationsSystem(),
+      NoteOperationsSystem(),
       NavigationSystem(navigatorKey),
-      DisplaySelectedSystem(),
-      ClearSelectedSystem(),
+      StatusBarSystem(),
+      InBetweenNavigationSystem(),
       SearchSystem()
     ]),
   ));
