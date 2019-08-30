@@ -1,4 +1,6 @@
 import 'package:entitas_ff/entitas_ff.dart';
+import 'package:flutter/material.dart';
+import 'package:flutter_staggered_grid_view/flutter_staggered_grid_view.dart';
 import 'package:notebulk/ecs/components.dart';
 
 void toggleSelected(Entity target) {
@@ -8,8 +10,7 @@ void toggleSelected(Entity target) {
     target.set(Selected());
 }
 
-/*UNUSED
-enum ListItemAnimation {
+/* enum ListItemAnimation {
   fadeIn,
   fadeOut,
   enterLeft,
@@ -182,11 +183,15 @@ class _GroupObservingGridBuilderState extends State<GroupObservingGridBuilder>
   Widget build(BuildContext context) {
     final groupLength = _group?.entities?.length ?? 0;
 
-    return GridView.builder(
-      primary: false,
+    return StaggeredGridView.countBuilder(
       itemCount: groupLength,
       shrinkWrap: true,
-      gridDelegate: widget.delegate,
+      physics: NeverScrollableScrollPhysics(),
+      padding: EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+      crossAxisCount: 2,
+      crossAxisSpacing: 4,
+      mainAxisSpacing: 4,
+      staggeredTileBuilder: (_) => StaggeredTile.fit(1),
       itemBuilder: (context, index) => AnimatableEntityObservingWidget(
         key: Key('GridItem${_group.entities[index].creationIndex}'),
         provider: (_) => _group.entities[index],
@@ -196,6 +201,7 @@ class _GroupObservingGridBuilderState extends State<GroupObservingGridBuilder>
         onAnimationEnd: (end) {
           if (!end) {
             _updated = -1;
+            _added = -1;
           }
         },
         builder: (itemEntity, anim, context) {
@@ -278,12 +284,11 @@ class _AnimatedListItem extends StatelessWidget {
         );
         break;
       case ListItemAnimation.expand:
-        itemWidget = ClipRect(
-          child: Align(
-            child: itemWidget,
-            widthFactor: delta,
-            heightFactor: delta,
-          ),
+        itemWidget = Align(
+          alignment: Alignment.centerLeft,
+          child: itemWidget,
+          widthFactor: delta,
+          heightFactor: delta,
         );
         break;
       case ListItemAnimation.shrink:
@@ -315,4 +320,4 @@ class _AnimatedListItem extends StatelessWidget {
     return itemWidget;
   }
 }
-*/
+ */

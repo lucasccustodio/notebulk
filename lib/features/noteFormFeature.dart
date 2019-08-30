@@ -22,6 +22,13 @@ class NoteFormFeature extends StatefulWidget {
 
 class _NoteFormFeatureState extends State<NoteFormFeature> {
   GlobalKey<FormState> key = GlobalKey<FormState>();
+  FocusNode contentsNode;
+
+  @override
+  void initState() {
+    super.initState();
+    contentsNode = FocusNode();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -104,8 +111,12 @@ class _NoteFormFeatureState extends State<NoteFormFeature> {
                               ? () {
                                   if (key.currentState.validate())
                                     key.currentState.save();
-                                  else
+                                  else {
+                                    contentsNode
+                                      ..unfocus()
+                                      ..requestFocus();
                                     return;
+                                  }
 
                                   entityManager
                                       .getUniqueEntity<FeatureEntityTag>()
@@ -206,7 +217,7 @@ class _NoteFormFeatureState extends State<NoteFormFeature> {
             ),
             buildPicField(noteEntity, localization, appTheme),
             Padding(
-              padding: const EdgeInsets.symmetric(vertical: 16),
+              padding: const EdgeInsets.only(top: 16),
               child: Text(
                 localization.featureContentsLabel,
                 style: style,
@@ -222,7 +233,7 @@ class _NoteFormFeatureState extends State<NoteFormFeature> {
             ),
             buildListField(noteEntity, localization, appTheme),
             Padding(
-              padding: const EdgeInsets.only(top: 8.0),
+              padding: const EdgeInsets.only(top: 16),
               child: Text(
                 localization.featureTagsLabel,
                 style: style,
@@ -246,6 +257,8 @@ class _NoteFormFeatureState extends State<NoteFormFeature> {
   Widget buildContentsField(
       Entity noteEntity, Localization localization, BaseTheme appTheme) {
     return TextFormField(
+      focusNode: contentsNode,
+      autofocus: true,
       initialValue: noteEntity.get<Contents>()?.value ?? '',
       textInputAction: TextInputAction.newline,
       keyboardType: TextInputType.text,
@@ -336,7 +349,7 @@ class _NoteFormFeatureState extends State<NoteFormFeature> {
     final style = appTheme.actionableLabelStyle;
 
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 12),
+      padding: const EdgeInsets.only(top: 12),
       child: Stack(
         alignment: Alignment.center,
         children: <Widget>[

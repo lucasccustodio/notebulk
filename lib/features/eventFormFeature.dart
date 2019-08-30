@@ -162,7 +162,7 @@ class _EventFormFeatureState extends State<EventFormFeature> {
           children: <Widget>[
             buildTimestamp(noteEntity, localization, appTheme),
             Padding(
-              padding: const EdgeInsets.symmetric(vertical: 16),
+              padding: const EdgeInsets.only(top: 16),
               child: Text(
                 localization.featurePriorityLabel,
                 style: style,
@@ -170,7 +170,7 @@ class _EventFormFeatureState extends State<EventFormFeature> {
             ),
             buildColorPicker(noteEntity, appTheme),
             Padding(
-              padding: const EdgeInsets.symmetric(vertical: 16.0),
+              padding: const EdgeInsets.only(top: 16.0),
               child: Text(
                 localization.featureContentsLabel,
                 style: style,

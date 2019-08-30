@@ -289,8 +289,8 @@ class DatabaseSystem extends TriggeredSystem implements InitSystem {
     entityManager
       ..removeUnique<SetupDatabaseEvent>()
       ..setUnique(StoragePermission())
-      ..setUnique(LoadUserSettingsEvent())
-      ..setUnique(RefreshDatabaseEvent());
+      ..setUnique(RefreshDatabaseEvent())
+      ..setUnique(LoadUserSettingsEvent());
   }
 
   void updateNotes(BoxEvent event) {
@@ -683,12 +683,9 @@ class UserSettingsSystem extends TriggeredSystem {
       statusBarColor: darkTheme ? BaseTheme.darkestGrey : Colors.white,
     ));
 
-    entityManager.removeUnique<LoadUserSettingsEvent>();
-
-    await Future.delayed(
-        Duration(milliseconds: 250),
-        () =>
-            entityManager.setUnique(NavigationEvent.replace(Routes.showNotes)));
+    entityManager
+      ..removeUnique<LoadUserSettingsEvent>()
+      ..setUnique(NavigationEvent.replace(Routes.showNotes));
   }
 
   void persistUserSettings() async {
