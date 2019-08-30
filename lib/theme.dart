@@ -79,13 +79,10 @@ abstract class BaseTheme {
 
 class LightTheme extends BaseTheme {
   @override
-  // TODO: implement primaryColor
   Color get primaryColor => Color(0xFFF6D365);
   @override
-  // TODO: implement accentColor
   Color get accentColor => Color(0xFFC83660);
   @override
-  // TODO: implement brightness
   Brightness get brightness => Brightness.light;
   @override
   Color get appBarColor => Colors.white;
@@ -93,7 +90,6 @@ class LightTheme extends BaseTheme {
   Color get appTitleColor => Colors.black;
 
   @override
-  // TODO: implement backgroundGradient
   LinearGradient get backgroundGradient => LinearGradient(
         colors: [Colors.white, primaryColor],
         begin: Alignment(0, -0.4),
@@ -101,65 +97,50 @@ class LightTheme extends BaseTheme {
       );
 
   @override
-  // TODO: implement buttonIconColor
   Color get buttonIconColor => Colors.white;
 
   @override
-  // TODO: implement buttonLabelColor
   Color get buttonLabelColor => Colors.white;
 
   @override
-  // TODO: implement otherTabItemColor
   Color get otherTabItemColor => BaseTheme.lightGrey;
 
   @override
-  // TODO: implement primaryButtonColor
   Color get primaryButtonColor => accentColor;
 
   @override
-  // TODO: implement secondaryButtonColor
   Color get secondaryButtonColor => BaseTheme.darkGrey;
 
   @override
-  // TODO: implement selectedTabItemColor
   Color get selectedTabItemColor => accentColor;
 
   @override
-  // TODO: implement settingsContainerColor
   Color get settingsContainerColor => Colors.white;
 
   @override
-  // TODO: implement settingsLabelContainerColor
   Color get settingsLabelContainerColor => Colors.blue;
 
   @override
-  // TODO: implement tertiaryButtonColor
   Color get tertiaryButtonColor => Colors.black;
 
   @override
-  // TODO: implement textFieldFillColor
   Color get textFieldFillColor => BaseTheme.lightGrey;
 
   @override
-  // TODO: implement formLabelStyle
   TextStyle get formLabelStyle =>
       super.formLabelStyle.copyWith(color: baseStyle.color.withOpacity(0.75));
 
   @override
-  // TODO: implement baseStyle
   TextStyle get baseStyle =>
       TextStyle(fontFamily: 'Palanquin', color: Colors.black, height: 1.2);
 }
 
 class DarkTheme extends BaseTheme {
   @override
-  // TODO: implement primaryColor
   Color get primaryColor => Color(0xFFC83660);
   @override
-  // TODO: implement accentColor
   Color get accentColor => Color(0xFFF6D365);
   @override
-  // TODO: implement brightness
   Brightness get brightness => Brightness.dark;
   @override
   Color get appBarColor => BaseTheme.darkestGrey;
@@ -167,7 +148,6 @@ class DarkTheme extends BaseTheme {
   Color get appTitleColor => Colors.white;
 
   @override
-  // TODO: implement backgroundGradient
   LinearGradient get backgroundGradient => LinearGradient(
         colors: [BaseTheme.darkestGrey, primaryColor],
         begin: Alignment(0, -0.4),
@@ -175,47 +155,36 @@ class DarkTheme extends BaseTheme {
       );
 
   @override
-  // TODO: implement buttonIconColor
   Color get buttonIconColor => Colors.black;
 
   @override
-  // TODO: implement buttonLabelColor
   Color get buttonLabelColor => Colors.black;
 
   @override
-  // TODO: implement otherTabItemColor
   Color get otherTabItemColor => BaseTheme.darkGrey;
 
   @override
-  // TODO: implement primaryButtonColor
   Color get primaryButtonColor => accentColor;
 
   @override
-  // TODO: implement secondaryButtonColor
   Color get secondaryButtonColor => BaseTheme.darkGrey;
 
   @override
-  // TODO: implement selectedTabItemColor
   Color get selectedTabItemColor => primaryColor;
 
   @override
-  // TODO: implement settingsContainerColor
   Color get settingsContainerColor => BaseTheme.darkestGrey;
 
   @override
-  // TODO: implement settingsLabelContainerColor
   Color get settingsLabelContainerColor => primaryColor;
 
   @override
-  // TODO: implement tertiaryButtonColor
   Color get tertiaryButtonColor => Colors.white;
 
   @override
-  // TODO: implement textFieldFillColor
   Color get textFieldFillColor => BaseTheme.lightGrey;
 
   @override
-  // TODO: implement baseStyle
   TextStyle get baseStyle =>
       TextStyle(fontFamily: 'Palanquin', color: Colors.white, height: 1.2);
 
@@ -226,7 +195,6 @@ class DarkTheme extends BaseTheme {
 
 class BlankTheme extends DarkTheme {
   @override
-  // TODO: implement backgroundGradient
   LinearGradient get backgroundGradient =>
       LinearGradient(colors: [Colors.black, Colors.black]);
 }

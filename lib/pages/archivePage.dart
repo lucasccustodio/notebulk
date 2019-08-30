@@ -108,10 +108,10 @@ class ArchivePage extends StatelessWidget {
 
   Widget buildNoteCard(Entity note) {
     return InkWell(
-      onLongPress: () => selectNote(note),
+      onLongPress: () => toggleSelected(note),
       onTap: () {
         if (entityManager.getUniqueEntity<DisplayStatusTag>().hasT<Toggle>())
-          selectNote(note);
+          toggleSelected(note);
       },
       child: NoteCardWidget(
         noteEntity: note,

@@ -98,9 +98,6 @@ class SearchPage extends StatelessWidget {
   }
 
   Widget buildNoteCard(Entity note) {
-    final term =
-        entityManager.getUniqueEntity<SearchBarTag>().get<SearchTerm>().value;
-
     return InkWell(
       onTap: () {
         entityManager

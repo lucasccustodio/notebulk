@@ -11,7 +11,7 @@
 ///      fonts:
 ///       - asset: fonts/AppIcons.ttf
 ///
-/// 
+///
 /// * MFG Labs, Copyright (C) 2012 by Daniel Bruce
 ///         Author:    MFG Labs
 ///         License:   SIL (http://scripts.sil.org/OFL)
@@ -25,7 +25,8 @@ class AppIcons {
   static const _kFontFam = 'AppIcons';
 
   static const IconData star = const IconData(0xe800, fontFamily: _kFontFam);
-  static const IconData starEmpty = const IconData(0xe801, fontFamily: _kFontFam);
+  static const IconData starEmpty =
+      const IconData(0xe801, fontFamily: _kFontFam);
   static const IconData ok = const IconData(0xe802, fontFamily: _kFontFam);
   static const IconData cancel = const IconData(0xe803, fontFamily: _kFontFam);
   static const IconData plus = const IconData(0xe804, fontFamily: _kFontFam);
@@ -34,13 +35,17 @@ class AppIcons {
   static const IconData right = const IconData(0xe807, fontFamily: _kFontFam);
   static const IconData menu = const IconData(0xf008, fontFamily: _kFontFam);
   static const IconData grid = const IconData(0xf00a, fontFamily: _kFontFam);
-  static const IconData gridEmpty = const IconData(0xf00b, fontFamily: _kFontFam);
-  static const IconData download = const IconData(0xf02e, fontFamily: _kFontFam);
+  static const IconData gridEmpty =
+      const IconData(0xf00b, fontFamily: _kFontFam);
+  static const IconData download =
+      const IconData(0xf02e, fontFamily: _kFontFam);
   static const IconData upload = const IconData(0xf02f, fontFamily: _kFontFam);
   static const IconData eye = const IconData(0xf082, fontFamily: _kFontFam);
   static const IconData trash = const IconData(0xf083, fontFamily: _kFontFam);
-  static const IconData calendar = const IconData(0xf4c5, fontFamily: _kFontFam);
+  static const IconData calendar =
+      const IconData(0xf4c5, fontFamily: _kFontFam);
   static const IconData search = const IconData(0xf50d, fontFamily: _kFontFam);
   static const IconData lock = const IconData(0xf512, fontFamily: _kFontFam);
-  static const IconData lockOpen = const IconData(0xf513, fontFamily: _kFontFam);
+  static const IconData lockOpen =
+      const IconData(0xf513, fontFamily: _kFontFam);
 }

@@ -224,7 +224,7 @@ class _EventFormFeatureState extends State<EventFormFeature> {
             .withOpacity(0.7);
 
     return InkWell(
-      onTap: () => showCalendarDialog(noteEntity),
+      onTap: () => showCalendarDialog(noteEntity, appTheme),
       child: Text(
         formatTimestamp(timestamp, localization),
         style: appTheme.titleTextStyle.copyWith(color: textColor),
@@ -232,10 +232,22 @@ class _EventFormFeatureState extends State<EventFormFeature> {
     );
   }
 
-  void showCalendarDialog(Entity noteEntity) async {
+  void showCalendarDialog(Entity noteEntity, BaseTheme appTheme) async {
     final today = DateTime.now();
     final date = await showDatePicker(
         context: context,
+        builder: (context, calendar) => Theme(
+              data: ThemeData(
+                  brightness: appTheme.brightness,
+                  primaryColor: appTheme.primaryColor,
+                  backgroundColor: appTheme.primaryColor,
+                  dialogTheme: DialogTheme(
+                    titleTextStyle: appTheme.titleTextStyle,
+                    contentTextStyle: appTheme.subtitleTextStyle,
+                  ),
+                  accentColor: appTheme.accentColor),
+              child: calendar,
+            ),
         initialDate: noteEntity.get<Timestamp>()?.value ?? today,
         firstDate: DateTime.utc(today.year),
         lastDate: DateTime.utc(today.year + 100));

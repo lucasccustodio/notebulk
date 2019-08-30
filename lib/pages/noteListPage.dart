@@ -1,5 +1,4 @@
 import 'package:entitas_ff/entitas_ff.dart';
-import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:kt_dart/kt.dart';
 import 'package:notebulk/ecs/components.dart';
@@ -138,10 +137,10 @@ class NoteListPage extends StatelessWidget {
 
   Widget buildNoteCard(Entity note) {
     return InkWell(
-      onLongPress: () => selectNote(note),
+      onLongPress: () => toggleSelected(note),
       onTap: () {
         if (entityManager.getUniqueEntity<DisplayStatusTag>().hasT<Toggle>())
-          selectNote(note);
+          toggleSelected(note);
         else {
           entityManager
             ..setUniqueOnEntity(FeatureEntityTag(), note)

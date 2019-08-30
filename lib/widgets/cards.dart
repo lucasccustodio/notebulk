@@ -216,7 +216,6 @@ class EventCardWidget extends StatelessWidget {
                     height: 8,
                   ),
                   buildContentsField(context, contents, appTheme),
-                  //GradientLineSeparator(),
                 ],
               ),
             ),

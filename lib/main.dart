@@ -10,7 +10,6 @@ import 'package:notebulk/ecs/systems.dart';
 import 'package:notebulk/features/noteFormFeature.dart';
 import 'package:notebulk/mainApp.dart';
 import 'package:notebulk/pages/splashScreenPage.dart';
-import 'package:notebulk/pages/storageErrorPage.dart';
 import 'package:notebulk/theme.dart';
 import 'package:notebulk/util.dart';
 import 'package:notebulk/widgets/util.dart';
@@ -72,9 +71,6 @@ void main() async {
               switch (settings.name) {
                 case Routes.splashScreen:
                   pageWidget = SplashScreenPage();
-                  break;
-                case Routes.errorPage:
-                  pageWidget = StorageErrorPage();
                   break;
                 case Routes.showNotes:
                   pageWidget = MainApp(

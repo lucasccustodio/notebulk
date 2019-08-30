@@ -1,14 +1,14 @@
 import 'package:entitas_ff/entitas_ff.dart';
-import 'package:flutter/material.dart';
 import 'package:notebulk/ecs/components.dart';
 
-void selectNote(Entity toSelect) {
-  if (toSelect.hasT<Selected>())
-    toSelect.remove<Selected>();
+void toggleSelected(Entity target) {
+  if (target.hasT<Selected>())
+    target.remove<Selected>();
   else
-    toSelect.set(Selected());
+    target.set(Selected());
 }
 
+/*UNUSED
 enum ListItemAnimation {
   fadeIn,
   fadeOut,
@@ -315,3 +315,4 @@ class _AnimatedListItem extends StatelessWidget {
     return itemWidget;
   }
 }
+*/

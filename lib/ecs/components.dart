@@ -4,85 +4,63 @@ import 'package:entitas_ff/entitas_ff.dart';
 import 'package:flutter/material.dart';
 import 'package:notebulk/theme.dart';
 
-class SetupLocalizationEvent extends UniqueComponent {
-  SetupLocalizationEvent(this.context);
+class AppSettingsTag extends UniqueComponent {}
 
-  final BuildContext context;
-}
+class AppTheme extends Component {
+  final BaseTheme value;
 
-class SetupDatabaseEvent extends UniqueComponent {}
-
-class DatabaseKey extends Component {
-  DatabaseKey(this.value);
-
-  final int value;
+  AppTheme(this.value);
 }
 
 //Note Entity components
-class Timestamp extends Component {
-  Timestamp(String _timestamp) : value = DateTime.parse(_timestamp);
-
-  final DateTime value;
-}
-
-class Picture extends Component {
-  Picture(String path) : value = File(path);
-
-  final File value;
-}
-
-class Contents extends Component {
-  Contents(this.value);
-
-  final String value;
-}
-
-enum ReminderPriority { none, low, medium, high, maximum }
-
-class Priority extends Component {
-  final ReminderPriority value;
-
-  Priority(this.value);
-}
-
-class Tags extends Component {
-  Tags(this.value);
-
-  final List<String> value;
-}
-
 class Archived extends Component {}
 
-class Todo extends Component {
-  Todo({this.value = const <ListItem>[]});
+class ArchiveNotesEvent extends UniqueComponent {}
 
-  final List<ListItem> value;
+class Changed extends Component {}
+
+class ChangeLocaleEvent extends UniqueComponent {
+  final String localeCode;
+
+  ChangeLocaleEvent(this.localeCode);
 }
 
-class TagData extends Component {
+class CompleteRemindersEvent extends UniqueComponent {}
+
+class Contents extends Component {
   final String value;
-  final Color color;
 
-  TagData(this.value, [this.color]);
+  Contents(this.value);
 }
+
+class DatabaseKey extends Component {
+  final int value;
+
+  DatabaseKey(this.value);
+}
+
+class DiscardSelectedEvent extends UniqueComponent {}
+
+class DisplayStatusTag extends UniqueComponent {}
+
+class ExportNotesEvent extends UniqueComponent {}
+
+//System components
+class FeatureEntityTag extends UniqueComponent {}
+
+class ImportNotesEvent extends UniqueComponent {}
 
 class ListItem {
-  ListItem(this.label, {this.isChecked = false, this.isNumbered = false});
+  bool isChecked;
 
+  bool isNumbered;
+
+  String label;
+  ListItem(this.label, {this.isChecked = false, this.isNumbered = false});
   ListItem.fromJson(Map<String, dynamic> map)
       : label = map['label'] ?? '',
         isNumbered = map['isNumbered'] ?? false,
         isChecked = map['isChecked'] ?? false;
-
-  bool isChecked;
-  bool isNumbered;
-  String label;
-
-  Map<String, dynamic> toJson() =>
-      {'label': label, 'isChecked': isChecked, 'isNumbered': isNumbered};
-
-  @override
-  String toString() => toJson().toString();
 
   @override
   int get hashCode => label.hashCode ^ isChecked.hashCode ^ isNumbered.hashCode;
@@ -90,12 +68,23 @@ class ListItem {
   @override
   bool operator ==(dynamic other) =>
       other is ListItem && other.hashCode == hashCode;
+
+  Map<String, dynamic> toJson() =>
+      {'label': label, 'isChecked': isChecked, 'isNumbered': isNumbered};
+
+  @override
+  String toString() => toJson().toString();
 }
 
-//System components
-enum NavigationOps { push, pop, replace, showDialog }
+class LoadUserSettingsEvent extends UniqueComponent {}
+
+class MainTickTag extends UniqueComponent {}
 
 class NavigationEvent extends UniqueComponent {
+  final String routeName;
+
+  final NavigationOps routeOp;
+
   NavigationEvent(
       {@required this.routeName, this.routeOp = NavigationOps.push});
 
@@ -105,51 +94,21 @@ class NavigationEvent extends UniqueComponent {
 
   NavigationEvent.push(this.routeName) : routeOp = NavigationOps.push;
 
+  NavigationEvent.replace(this.routeName) : routeOp = NavigationOps.replace;
   NavigationEvent.showDialog(this.routeName)
       : routeOp = NavigationOps.showDialog;
-
-  NavigationEvent.replace(this.routeName) : routeOp = NavigationOps.replace;
-
-  final String routeName;
-  final NavigationOps routeOp;
 }
+
+enum NavigationOps { push, pop, replace, showDialog }
 
 class PageIndex extends UniqueComponent {
-  PageIndex(this.value, {this.oldValue});
-
   final int value;
+
   final int oldValue;
+  PageIndex(this.value, {this.oldValue});
 }
 
-class StoragePermission extends UniqueComponent {
-  StoragePermission();
-}
-
-class Ready extends Component {}
-
-class PersistUserSettingsEvent extends UniqueComponent {}
-
-class LoadUserSettingsEvent extends UniqueComponent {}
-
-class RefreshDatabaseEvent extends UniqueComponent {}
-
-class DiscardSelectedEvent extends UniqueComponent {}
-
-class ArchiveNotesEvent extends UniqueComponent {}
-
-class RestoreNotesEvent extends UniqueComponent {}
-
-class ExportNotesEvent extends UniqueComponent {}
-
-class ImportNotesEvent extends UniqueComponent {}
-
-class CompleteRemindersEvent extends UniqueComponent {}
-
-class FeatureEntityTag extends UniqueComponent {}
-
-class WaitForUser extends Component {}
-
-class Changed extends Component {}
+class PerformSearchEvent extends UniqueComponent {}
 
 class PersistMe extends Component {
   final int key;
@@ -157,56 +116,74 @@ class PersistMe extends Component {
   PersistMe([this.key]);
 }
 
-class DisplayStatusTag extends UniqueComponent {}
+class PersistUserSettingsEvent extends UniqueComponent {}
 
-class Selected extends Component {}
+class Picture extends Component {
+  final File value;
+
+  Picture(String path) : value = File(path);
+}
+
+class Priority extends Component {
+  final ReminderPriority value;
+
+  Priority(this.value);
+}
+
+class RefreshDatabaseEvent extends UniqueComponent {}
+
+enum ReminderPriority { none, low, medium, high, maximum }
+
+class RestoreNotesEvent extends UniqueComponent {}
+
+class SearchBarTag extends UniqueComponent {}
 
 class SearchResult extends Component {}
 
 class SearchTerm extends Component {
-  SearchTerm(this.value);
-
   final String value;
+
+  SearchTerm(this.value);
 }
 
-class PerformSearchEvent extends UniqueComponent {}
+class Selected extends Component {}
 
-class Counter extends Component {
-  Counter(this.value);
+class SetupDatabaseEvent extends UniqueComponent {}
 
+class StoragePermission extends UniqueComponent {
+  StoragePermission();
+}
+
+class TagData extends Component {
+  final String value;
+
+  TagData(this.value);
+}
+
+class Tags extends Component {
+  final List<String> value;
+
+  Tags(this.value);
+}
+
+class Tick extends Component {
   final int value;
+
+  Tick(this.value);
 }
 
-class AppTheme extends Component {
-  final BaseTheme value;
+class Timestamp extends Component {
+  final DateTime value;
 
-  AppTheme(this.value);
+  Timestamp(String _timestamp) : value = DateTime.parse(_timestamp);
+}
+
+class Todo extends Component {
+  final List<ListItem> value;
+
+  Todo({this.value = const <ListItem>[]});
 }
 
 class Toggle extends Component {}
 
-class FABTag extends UniqueComponent {}
-
-class MainTickTag extends UniqueComponent {}
-
-class Tick extends Component {
-  Tick(this.value);
-
-  final int value;
-}
-
-class SearchBarTag extends UniqueComponent {}
-
-class AppSettingsTag extends UniqueComponent {}
-
-class GridCount extends Component {
-  GridCount([this.value = 2]);
-
-  final int value;
-}
-
-class ChangeLocaleEvent extends UniqueComponent {
-  final String localeCode;
-
-  ChangeLocaleEvent(this.localeCode);
-}
+class WaitForUser extends Component {}

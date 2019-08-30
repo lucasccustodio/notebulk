@@ -40,22 +40,6 @@ Widget buildNotesSliverGridView(
   );
 }
 
-Widget buildAnimatedNotesSliverGridView(
-    List<ObservableEntity> notes, Widget Function(Entity) buildNoteCard,
-    [String emptyMessage, List<ListItem> items = const [], List<String> tags]) {
-  return SliverPadding(
-    padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-    sliver: SliverStaggeredGrid.countBuilder(
-      crossAxisCount: 2,
-      itemCount: notes.length,
-      mainAxisSpacing: 4,
-      crossAxisSpacing: 4,
-      itemBuilder: (context, index) => buildNoteCard(notes[index]),
-      staggeredTileBuilder: (index) => StaggeredTile.fit(1),
-    ),
-  );
-}
-
 Widget buildNotesListView(
     List<ObservableEntity> notes, Widget Function(Entity) buildNoteCard) {
   return ListView.builder(
@@ -181,7 +165,6 @@ class BottomNavigation extends StatelessWidget {
                       Container(
                         height: tabHeight,
                         width: tabWidth,
-                        //color: Colors.white,
                         alignment: Alignment.center,
                         child: Text(
                           items[i].label,
@@ -216,9 +199,8 @@ class BottomNavigation extends StatelessWidget {
 }
 
 class TabItem {
-  const TabItem({this.icon, this.label});
+  const TabItem({this.label});
 
-  final IconData icon;
   final String label;
 }
 
@@ -347,26 +329,6 @@ class ShouldLeavePromptDialog extends StatelessWidget {
         ),
       ],
     );
-  }
-}
-
-class RichTextController extends TextEditingController {
-  @override
-  TextSpan buildTextSpan({TextStyle style, bool withComposing}) {
-    if (!value.composing.isValid || !withComposing) {
-      return TextSpan(style: style, text: text);
-    }
-    final composingStyle = style.merge(
-      const TextStyle(decoration: TextDecoration.underline),
-    );
-    return TextSpan(style: style, children: <TextSpan>[
-      TextSpan(text: value.composing.textBefore(value.text)),
-      TextSpan(
-        style: composingStyle,
-        text: value.composing.textInside(value.text),
-      ),
-      TextSpan(text: value.composing.textAfter(value.text)),
-    ]);
   }
 }
 
