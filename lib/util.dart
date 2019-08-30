@@ -308,12 +308,8 @@ class Localization extends Component {
 class Routes {
   static const String showNotes = 'showNotes';
   static const String createNote = 'createNote';
-  static const String createList = 'createList';
-  static const String manageTags = 'manageTags';
   static const String editNote = 'editNote';
-  static const String editList = 'editList';
-  static const String errorPage = 'errorPage';
   static const String splashScreen = 'splashScreen';
-  static const String createEvent = 'createEvent';
-  static const String editEvent = 'editEvent';
+  static const String createReminder = 'createReminder';
+  static const String editReminder = 'editReminder';
 }

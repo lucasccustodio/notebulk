@@ -77,7 +77,6 @@ void main() async {
                     entityManager: mainEntityManager,
                   );
                   break;
-                case Routes.createList:
                 case Routes.createNote:
                   pageWidget = EntityManagerProvider.feature(
                     child: NoteFormFeature(
@@ -143,7 +142,7 @@ void main() async {
                     ),
                   );
                   break;
-                case Routes.createEvent:
+                case Routes.createReminder:
                   pageWidget = EntityManagerProvider.feature(
                     system: FeatureSystem(
                         rootEntityManager: mainEntityManager,
@@ -170,7 +169,7 @@ void main() async {
                     ),
                   );
                   break;
-                case Routes.editEvent:
+                case Routes.editReminder:
                   pageWidget = EntityManagerProvider.feature(
                     child: EventFormFeature(
                       title: localization.editEventFeatureTitle,
