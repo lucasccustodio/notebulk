@@ -32,18 +32,18 @@ class ReminderListPage extends StatelessWidget {
           final currentDay = today.day;
           final currentMonth = today.month;
           final currentYear = today.year;
+          final currentDate =
+              DateTime.utc(currentYear, currentMonth, currentDay);
 
           for (final reminder in reminderList) {
-            final date = reminder.get<Timestamp>().value;
+            final reminderDueDate = reminder.get<Timestamp>().value;
 
             if (reminder.hasT<Toggle>()) {
               completedReminders.add(reminder);
               continue;
             }
 
-            if (date.year == currentYear &&
-                date.month == currentMonth &&
-                date.day == currentDay) {
+            if (currentDate.isBefore(reminderDueDate)) {
               currentReminders.add(reminder);
             } else {
               lateReminders.add(reminder);
@@ -147,11 +147,11 @@ class ReminderListPage extends StatelessWidget {
   Widget buildEventCard(Entity note) {
     return InkWell(
       onLongPress: () {
-        selectNote(note);
+        toggleSelected(note);
       },
       onTap: () {
         if (entityManager.getUniqueEntity<DisplayStatusTag>().hasT<Toggle>()) {
-          selectNote(note);
+          toggleSelected(note);
         } else {
           if (!note.hasT<Toggle>())
             entityManager
