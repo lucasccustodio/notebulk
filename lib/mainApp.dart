@@ -2,7 +2,7 @@ import 'dart:io';
 
 import 'package:entitas_ff/entitas_ff.dart';
 import 'package:flutter/gestures.dart';
-import 'package:flutter/material.dart';
+import 'package:flutter/material.dart' hide TabBar;
 import 'package:notebulk/ecs/components.dart';
 import 'package:notebulk/pages/archivePage.dart';
 import 'package:notebulk/pages/noteListPage.dart';
@@ -79,7 +79,8 @@ class _MainAppState extends State<MainApp> {
               .value;
 
           final isLandspace =
-              MediaQuery.of(context).orientation == Orientation.landscape;
+              MediaQuery.of(context).orientation == Orientation.landscape &&
+                  Platform.isAndroid;
 
           return GestureDetector(
             behavior: HitTestBehavior.translucent,
@@ -113,10 +114,6 @@ class _MainAppState extends State<MainApp> {
                           child: buildTabBar(appTheme, localization),
                           preferredSize: Size(MediaQuery.of(context).size.width,
                               kTextTabBarHeight),
-                        ),
-                        title: Text(
-                          'NOTEBULK',
-                          style: appTheme.appTitleTextStyle,
                         )),
                 drawer: !isLandspace && (Platform.isAndroid || Platform.isIOS)
                     ? buildDrawer(appTheme)
@@ -289,7 +286,7 @@ class _MainAppState extends State<MainApp> {
         ),
         Positioned(
           bottom: 0,
-          child: StatusBarContainer(
+          child: StatusBar(
             key: ValueKey('StatusBar'),
             actions: (index) => <Widget>[
               if (index == 0)
@@ -352,7 +349,7 @@ class _MainAppState extends State<MainApp> {
       builder: (pageEntity, animations, __) {
         final pageIndex = pageEntity.get<PageIndex>().value;
 
-        return BottomNavigation(
+        return TabBar(
           index: pageIndex,
           scaleIcon: animations['iconScale'],
           colorIcon: animations['iconColor'],

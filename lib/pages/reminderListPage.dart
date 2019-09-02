@@ -1,9 +1,6 @@
-import 'package:entitas_ff/entitas_ff.dart';
 import 'package:flutter/material.dart';
 import 'package:kt_dart/kt.dart';
-import 'package:notebulk/ecs/components.dart';
-import 'package:notebulk/ecs/matchers.dart';
-import 'package:notebulk/ecs/util.dart';
+import 'package:notebulk/ecs/ecs.dart';
 import 'package:notebulk/theme.dart';
 import 'package:notebulk/util.dart';
 import 'package:notebulk/widgets/cards.dart';
@@ -35,6 +32,7 @@ class ReminderListPage extends StatelessWidget {
           final currentDate =
               DateTime.utc(currentYear, currentMonth, currentDay);
 
+          // Sort and group reminders into current, late and completed
           for (final reminder in reminderList) {
             final reminderDueDate = reminder.get<Timestamp>().value;
 
@@ -76,7 +74,7 @@ class ReminderListPage extends StatelessWidget {
                         style: appTheme.titleTextStyle,
                       ),
                     ),
-                    buildNotesGridView(currentReminders, buildEventCard)
+                    buildNotesGridView(currentReminders, buildReminderCard)
                   ] else
                     ListTile(
                       title: Text(
@@ -94,7 +92,7 @@ class ReminderListPage extends StatelessWidget {
                         style: appTheme.titleTextStyle,
                       ),
                     ),
-                    buildNotesGridView(lateReminders, buildEventCard)
+                    buildNotesGridView(lateReminders, buildReminderCard)
                   ] else
                     ListTile(
                       title: Text(
@@ -112,7 +110,7 @@ class ReminderListPage extends StatelessWidget {
                         style: appTheme.titleTextStyle,
                       ),
                     ),
-                    buildNotesGridView(completedReminders, buildEventCard)
+                    buildNotesGridView(completedReminders, buildReminderCard)
                   ] else
                     ListTile(
                       title: Text(
@@ -134,8 +132,9 @@ class ReminderListPage extends StatelessWidget {
                   ),
                   backgroundColor: appTheme.primaryButtonColor,
                   onPressed: () {
+                    // Open form to create a reminder
                     entityManager
-                        .setUnique(NavigationEvent.push(Routes.createEvent));
+                        .setUnique(NavigationEvent.push(Routes.createReminder));
                   },
                 ),
               )
@@ -144,23 +143,24 @@ class ReminderListPage extends StatelessWidget {
         });
   }
 
-  Widget buildEventCard(Entity note) {
+  Widget buildReminderCard(Entity reminder) {
     return InkWell(
       onLongPress: () {
-        toggleSelected(note);
+        toggleSelected(reminder);
       },
       onTap: () {
-        if (entityManager.getUniqueEntity<DisplayStatusTag>().hasT<Toggle>()) {
-          toggleSelected(note);
+        if (entityManager.getUniqueEntity<StatusBarTag>().hasT<Toggle>()) {
+          toggleSelected(reminder);
         } else {
-          if (!note.hasT<Toggle>())
+          // Completed reminders can't be edited, so check first
+          if (!reminder.hasT<Toggle>())
             entityManager
-              ..setUniqueOnEntity(FeatureEntityTag(), note)
-              ..setUnique(NavigationEvent.push(Routes.editEvent));
+              ..setUniqueOnEntity(FeatureEntityTag(), reminder)
+              ..setUnique(NavigationEvent.push(Routes.editReminder));
         }
       },
-      child: EventCardWidget(
-        noteEntity: note,
+      child: ReminderCardWidget(
+        reminderEntity: reminder,
       ),
     );
   }

@@ -2,7 +2,10 @@ import 'package:entitas_ff/entitas_ff.dart';
 import 'package:notebulk/ecs/components.dart';
 import 'package:notebulk/util.dart';
 
-//A valid Note Entity has timestamp, contents and possible tags & todo items.
+/*
+  Since a Entity is a mere container for components there must be a way to classify and group them, that's what a matcher is for.
+*/
+
 mixin Matchers {
   static EntityMatcher note = EntityMatcher(
       all: [Timestamp, Contents, DatabaseKey],

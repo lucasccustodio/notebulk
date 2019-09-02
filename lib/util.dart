@@ -2,6 +2,7 @@ import 'package:entitas_ff/entitas_ff.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
+// Format timestamp to match the app's aesthetic
 String formatTimestamp(DateTime timestamp, Localization localization,
     {bool includeDay = true, bool includeWeekDay = true}) {
   final day = timestamp.day;
@@ -25,6 +26,7 @@ String formatTimestamp(DateTime timestamp, Localization localization,
   return buffer.toString();
 }
 
+// Localization data, currently only Pt-Br and EN-US
 class Localization extends Component {
   final String emptyNoteHintTitle;
   final String emptyNoteHintSubtitle;
@@ -305,8 +307,9 @@ class Localization extends Component {
       @required this.pageLabels});
 }
 
+// Route names, each must be unique
 class Routes {
-  static const String showNotes = 'showNotes';
+  static const String mainScreen = 'mainPage';
   static const String createNote = 'createNote';
   static const String editNote = 'editNote';
   static const String splashScreen = 'splashScreen';

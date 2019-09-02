@@ -14,15 +14,20 @@ import 'package:notebulk/util.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:permission/permission.dart';
 
+// Compact a Hive box if the deletedEntries is above a threshold of 50.
 bool _compactIf(int entries, int deletedEntries) => deletedEntries > 50;
 
+// Returns a valid path to store our files
 Future<String> _getValidPath() async {
-  if (Platform.isFuchsia || Platform.isWindows || Platform.isLinux)
-    return './Files/';
-  else
-    return (await getExternalStorageDirectory()).path;
+  /* 
+  Uncomment if Desktop
+  if (Platform.isFuchsia || Platform.isLinux)
+    return './Files';
+  else */
+  return (await getExternalStorageDirectory()).path;
 }
 
+// Helper function to populate a Entity with note-related data
 void _populateNote(EntityManager entityManager, Entity noteEntity,
     EntityGroup tagMap, Map<String, dynamic> snapshotData) {
   noteEntity
@@ -36,6 +41,7 @@ void _populateNote(EntityManager entityManager, Entity noteEntity,
 
   noteEntity.set(Tags(noteTags.asList()));
 
+  /// Tags must be unique, so check before creating one to avoid duplicates
   for (var noteTag in noteTags.iter) {
     if (tags.none((e) => e.get<TagData>().value == noteTag))
       entityManager.createEntity().set(TagData(noteTag));
@@ -54,11 +60,12 @@ void _populateNote(EntityManager entityManager, Entity noteEntity,
   if (snapshotData['picFile'] != null)
     noteEntity.set(Picture(snapshotData['picFile']));
 
-  if (snapshotData['archived'] != null && snapshotData['archived'] == true) {
+  if (snapshotData['archived'] == true) {
     noteEntity.set(Archived());
   }
 }
 
+// Helper function to populate a Entity with reminder-related data
 void _populateReminder(EntityManager entityManager, Entity reminderEntity,
     Map<String, dynamic> snapshotData) {
   reminderEntity
@@ -68,38 +75,49 @@ void _populateReminder(EntityManager entityManager, Entity reminderEntity,
     ..set(snapshotData['completed'] == true ? Toggle() : null);
 }
 
+// Manages database backup and restoration
 class BackupSystem extends TriggeredSystem {
+  // TODO: Allow user to define a path instead.
   static const backupPath = '/storage/emulated/0/backup.json';
 
+  // Only react when the event component is added
   @override
   GroupChangeEvent get event => GroupChangeEvent.added;
 
+  // Match both variantes of the backup events
   @override
   EntityMatcher get matcher =>
-      EntityMatcher(any: [ImportNotesEvent, ExportNotesEvent]);
+      EntityMatcher(any: [ImportBackupEvent, ExportBackupEvent]);
 
   @override
   void executeOnChange() async {
-    if (entityManager.getUnique<ImportNotesEvent>() != null)
+    // Since the system reacts to both variants we need to branch correctly
+    if (entityManager.getUnique<ImportBackupEvent>() != null)
       importBackup();
-    else if (entityManager.getUnique<ExportNotesEvent>() != null)
+    else if (entityManager.getUnique<ExportBackupEvent>() != null)
       exportBackup();
 
+    // Important due to the fact the system only reacts to when the event components are added
     entityManager
-      ..removeUnique<ImportNotesEvent>()
-      ..removeUnique<ExportNotesEvent>();
+      ..removeUnique<ImportBackupEvent>()
+      ..removeUnique<ExportBackupEvent>();
   }
 
   void exportBackup() {
-    final mapFile = File(backupPath);
-    final noteGroup = entityManager.groupMatching(Matchers.note);
+    // Where to export to
+    final jsonFile = File(backupPath);
+    // Export all notes, including archived ones
+    final noteGroup =
+        entityManager.groupMatching(Matchers.note.copyWith(none: [Priority]));
     final reminderGroup = entityManager.groupMatching(Matchers.reminder);
+
     try {
       final notes = noteGroup.entities;
       final reminders = reminderGroup.entities;
       final settings = entityManager.getUniqueEntity<AppSettingsTag>();
       final map = <String, dynamic>{};
 
+      // Populate array of notes
       map['notes'] = notes
           .map((e) => {
                 'contents': e.get<Contents>().value,
@@ -116,6 +134,7 @@ class BackupSystem extends TriggeredSystem {
               })
           .toList();
 
+      // Populate array of reminders
       map['reminders'] = reminders
           .map((e) => {
                 'contents': e.get<Contents>().value,
@@ -125,18 +144,21 @@ class BackupSystem extends TriggeredSystem {
               })
           .toList();
 
+      // Save settings, for now only dark mode is available
       map['settings'] = {
         'darkTheme':
             settings.get<AppTheme>().value.brightness == Brightness.dark,
       };
 
-      mapFile.writeAsStringSync(jsonEncode(map));
+      jsonFile.writeAsStringSync(jsonEncode(map));
     } on FileSystemException catch (e) {
       print(e);
     } finally {
       final localization =
           entityManager.getUniqueEntity<AppSettingsTag>().get<Localization>();
-      entityManager.getUniqueEntity<DisplayStatusTag>()
+
+      // Display the status bar informing the user that exportation is done
+      entityManager.getUniqueEntity<StatusBarTag>()
         ..set(Contents(localization.exportedAlert))
         ..set(WaitForUser())
         ..set(Toggle());
@@ -148,18 +170,20 @@ class BackupSystem extends TriggeredSystem {
 
     if (backupFile.existsSync()) {
       try {
+        // Retrieve the JSON data map
         final Map<String, dynamic> map =
             jsonDecode(backupFile.readAsStringSync() ?? '{}');
         final snapshotData = Map<String, dynamic>.from(map);
-
         final tagMap = entityManager.groupMatching(Matchers.tag);
-
         final darkTheme = snapshotData['settings']['darkTheme'] ?? false;
 
+        // Set the theme accordingly
         entityManager
             .getUniqueEntity<AppSettingsTag>()
             .set(AppTheme(darkTheme ? DarkTheme() : LightTheme()));
 
+        // Loop through notes array and create note entities
+        // TODO: Should duplicates be handled somehow?
         for (final noteData in snapshotData['notes']) {
           final noteEntity = entityManager.createEntity();
 
@@ -167,6 +191,7 @@ class BackupSystem extends TriggeredSystem {
               Map<String, dynamic>.from(noteData));
         }
 
+        // Same for the reminders
         for (final reminderData in snapshotData['reminders']) {
           final reminderEntity = entityManager.createEntity();
 
@@ -176,20 +201,26 @@ class BackupSystem extends TriggeredSystem {
       } on FileSystemException catch (e) {
         print(e);
       } finally {
+        // Matches only imported notes due their lack of DatabaseKey, inserted after persistance and during database refresh.
         final noteGroup = entityManager.groupMatching(Matchers.note
             .copyWith(all: [Contents, Timestamp], none: [DatabaseKey]));
+        // Same for reminders
         final reminderGroup = entityManager.groupMatching(Matchers.note
             .copyWith(
                 all: [Contents, Timestamp, Priority], none: [DatabaseKey]));
 
+        // This triggers the persistance systems and subsequently database refresh
         for (final e in [...noteGroup.entities, ...reminderGroup.entities])
           e.set(PersistMe());
 
+        // Also persist theme settings
         entityManager.setUnique(PersistUserSettingsEvent());
 
         final localization =
             entityManager.getUniqueEntity<AppSettingsTag>().get<Localization>();
-        entityManager.getUniqueEntity<DisplayStatusTag>()
+
+        // Inform the user that new data was imported
+        entityManager.getUniqueEntity<StatusBarTag>()
           ..set(Contents(localization.importedAlert))
           ..set(WaitForUser())
           ..set(Toggle());
@@ -198,39 +229,70 @@ class BackupSystem extends TriggeredSystem {
   }
 }
 
-class DatabaseSystem extends TriggeredSystem implements InitSystem {
+// Manages loading, creating and updating notes/reminders
+class DatabaseSystem extends TriggeredSystem implements InitSystem, ExitSystem {
   EntityGroup tagMap, noteMap, reminderMap;
   StreamSubscription reminderListener, noteListener;
 
+  // React only to when event components are added
   @override
-  GroupChangeEvent get event => GroupChangeEvent.added;
+  GroupChangeEvent get event => GroupChangeEvent.addedOrUpdated;
 
+  // Match both variants
   @override
   EntityMatcher get matcher =>
       EntityMatcher(any: [SetupDatabaseEvent, RefreshDatabaseEvent]);
 
+  void askPermission() async {
+    final status =
+        await Permission.getPermissionsStatus([PermissionName.Storage]);
+
+    if (status.first.permissionStatus == PermissionStatus.deny ||
+        status.first.permissionStatus == PermissionStatus.notDecided ||
+        status.first.permissionStatus == PermissionStatus.notAgain) {
+      final status =
+          (await Permission.requestPermissions([PermissionName.Storage]))
+              .first
+              .permissionStatus;
+
+      if (status != PermissionStatus.allow) return;
+    }
+
+    entityManager
+      ..setUnique(StoragePermission())
+      ..setUnique(SetupDatabaseEvent());
+  }
+
   @override
   void executeOnChange() {
-    if (entityManager.getUnique<StoragePermission>() == null &&
-        entityManager.getUnique<SetupDatabaseEvent>() != null) {
+    // Dont't do anything if the user didn't give permission
+    if (entityManager.getUnique<StoragePermission>() == null) {
+      return askPermission();
+    } else if (entityManager.getUnique<SetupDatabaseEvent>() != null) {
       return setupDatabase();
     }
 
     refreshNotes();
     refreshReminders();
+
+    // Important to avoid reacting needlessly to events
     entityManager.removeUnique<RefreshDatabaseEvent>();
   }
 
   @override
   void init() {
+    // These allow the system to avoid creating duplicates
     tagMap = entityManager.groupMatching(Matchers.tag);
     noteMap = entityManager.groupMatching(Matchers.note);
     reminderMap = entityManager.groupMatching(Matchers.reminder);
 
-    setupDatabase();
+    // Initialize the database when the system is created
+    entityManager.setUnique(SetupDatabaseEvent());
   }
 
+  // React to changes on the note box
   void refreshNotes() async {
+    // This gets called during the lifetime of system, so avoid opening the box needlessly
     final noteStore = !Hive.isBoxOpen('notes')
         ? await Hive.openBox('notes', compactionStrategy: _compactIf)
         : Hive.box('notes');
@@ -244,10 +306,12 @@ class DatabaseSystem extends TriggeredSystem implements InitSystem {
       _populateNote(entityManager, noteEntity, tagMap, snapshotData);
     }
 
+    // Avoid listening to changes twice
     await noteListener?.cancel();
     noteListener = noteStore.watch().listen(updateNotes);
   }
 
+  // Same for reminders
   void refreshReminders() async {
     final reminderStore = !Hive.isBoxOpen('reminders')
         ? await Hive.openBox('reminders', compactionStrategy: _compactIf)
@@ -262,38 +326,26 @@ class DatabaseSystem extends TriggeredSystem implements InitSystem {
       _populateReminder(entityManager, reminderEntity, snapshotData);
     }
 
+    // Avoid listening to changes twice
     await reminderListener?.cancel();
     reminderListener = reminderStore.watch().listen(updateReminders);
   }
 
+  // Check for permission, request if needed and set up the database
   void setupDatabase() async {
-    if (Platform.isAndroid || Platform.isIOS) {
-      final status =
-          await Permission.getPermissionsStatus([PermissionName.Storage]);
-
-      if (status.first.permissionStatus == PermissionStatus.deny ||
-          status.first.permissionStatus == PermissionStatus.notDecided ||
-          status.first.permissionStatus == PermissionStatus.notAgain) {
-        final status =
-            (await Permission.requestPermissions([PermissionName.Storage]))
-                .first
-                .permissionStatus;
-
-        if (status != PermissionStatus.allow) return;
-      }
-    }
-
     final path = await _getValidPath();
+    // Must be called before any Hive operations otherwise throws an exception
     Hive.init(path);
 
+    // Also apply user settings
     entityManager
       ..removeUnique<SetupDatabaseEvent>()
-      ..setUnique(StoragePermission())
       ..setUnique(RefreshDatabaseEvent())
       ..setUnique(LoadUserSettingsEvent());
   }
 
   void updateNotes(BoxEvent event) {
+    // Is it modifying an existing note or creating a new one?
     final noteEntity = KtList.from(noteMap.entities)
             .singleOrNull((e) => e.get<DatabaseKey>().value == event.key) ??
         entityManager.createEntity()
@@ -309,6 +361,7 @@ class DatabaseSystem extends TriggeredSystem implements InitSystem {
   }
 
   void updateReminders(BoxEvent event) {
+    // Is it modifying an existing reminder or creating a new one?
     final reminderEntity = KtList.from(reminderMap.entities)
             .singleOrNull((e) => e.get<DatabaseKey>().value == event.key) ??
         entityManager.createEntity()
@@ -322,8 +375,16 @@ class DatabaseSystem extends TriggeredSystem implements InitSystem {
       _populateReminder(entityManager, reminderEntity, snapshotData);
     }
   }
+
+  // Exiting so cancel active listeners, if any
+  @override
+  void exit() {
+    reminderListener?.cancel();
+    noteListener?.cancel();
+  }
 }
 
+// Handles deleting selected notes and reminders
 class DiscardSystem extends TriggeredSystem {
   @override
   GroupChangeEvent get event => GroupChangeEvent.addedOrUpdated;
@@ -333,12 +394,10 @@ class DiscardSystem extends TriggeredSystem {
 
   @override
   void executeOnChange() async {
-    if (Hive.path == null) {
-      return;
-    }
-
+    // Matches everything that is currently selected
     final selected = entityManager.group(any: [Selected]);
 
+    // Nothing to do
     if (selected.isEmpty) {
       return;
     }
@@ -346,12 +405,14 @@ class DiscardSystem extends TriggeredSystem {
     for (var e in selected.entities) {
       final dbKey = e.get<DatabaseKey>().value;
       final priority = e.get<Priority>()?.value;
+      // Notes can't have priority so use it's presence to branch
       final name = priority != null ? 'reminders' : 'notes';
 
       final store =
           !Hive.isBoxOpen(name) ? Hive.box(name) : await Hive.openBox(name);
       await store.deleteAll([dbKey]);
 
+      // Delete this note's associated image, if any, to save disk space
       if (e.hasT<Picture>()) {
         final file = e.get<Picture>().value;
 
@@ -365,6 +426,7 @@ class DiscardSystem extends TriggeredSystem {
   }
 }
 
+// Helper system to clear the selection when navigating, so the user doesn't delete/modify things previously selected and no longer visible
 class InBetweenNavigationSystem extends TriggeredSystem {
   @override
   GroupChangeEvent get event => GroupChangeEvent.addedOrUpdated;
@@ -381,7 +443,8 @@ class InBetweenNavigationSystem extends TriggeredSystem {
 
   @override
   void executeOnChange() {
-    entityManager.getUniqueEntity<SearchBarTag>().set(SearchTerm(''));
+    // TODO: Should the search bar be cleared was well?
+    //entityManager.getUniqueEntity<SearchBarTag>().set(SearchTerm(''));
     final selectedNotes = entityManager.group(all: [Selected]);
 
     for (var note in selectedNotes.entities) {
@@ -390,6 +453,7 @@ class InBetweenNavigationSystem extends TriggeredSystem {
   }
 }
 
+// Handles navigation by delegating to a Navigator instance but allows other system to the react to navigation changes, see [InBetweenNavigationSystem]
 class NavigationSystem extends TriggeredSystem {
   final GlobalKey<NavigatorState> _key;
 
@@ -421,6 +485,7 @@ class NavigationSystem extends TriggeredSystem {
   }
 }
 
+// Handles modification on notes like archiving and restoring
 class NoteOperationsSystem extends TriggeredSystem {
   @override
   GroupChangeEvent get event => GroupChangeEvent.added;
@@ -431,22 +496,23 @@ class NoteOperationsSystem extends TriggeredSystem {
 
   @override
   void executeOnChange() async {
-    if (Hive.path == null) {
-      return;
-    }
+    // Match only selected notes
+    final selectedNotes = entityManager.groupMatching(
+        Matchers.note.extend(all: [Selected]).copyWith(none: [Priority]));
 
-    final selectedNotes = entityManager.group(all: [Selected]);
-
+    // Nothing to do
     if (selectedNotes.isEmpty) {
       return;
     }
 
     for (var note in selectedNotes.entities) {
+      // Branch depending on the event
       if (entityManager.getUnique<ArchiveNotesEvent>() != null)
         note.set(Archived());
       else if (entityManager.getUnique<RestoreNotesEvent>() != null)
         note.remove<Archived>();
 
+      // Apply changes and persist
       note
         ..set(PersistMe(note.get<DatabaseKey>().value))
         ..remove<Selected>();
@@ -458,6 +524,7 @@ class NoteOperationsSystem extends TriggeredSystem {
   }
 }
 
+// Handles persisting notes and reminders.
 class PersistanceSystem extends ReactiveSystem {
   @override
   GroupChangeEvent get event => GroupChangeEvent.addedOrUpdated;
@@ -465,24 +532,20 @@ class PersistanceSystem extends ReactiveSystem {
   @override
   EntityMatcher get matcher => EntityMatcher(all: [PersistMe]);
 
+  // Here entities will contain all notes and reminders that got a PersistMe component this frame, which is ideal for operations in batch and in this case will avoid refreshing the database more than once.
   @override
   void executeWith(List<ObservableEntity> entities) async {
-    if (Hive.path == null) {
-      return;
-    }
-
     for (var e in entities) {
       final contents = e.get<Contents>()?.value;
       final tags = e.get<Tags>()?.value ?? [];
       final items = e.get<Todo>()?.value ?? [];
+      // If present, update, otherwise add to database
       final dbKey = e.get<PersistMe>()?.key;
       final picFile = e.get<Picture>()?.value?.path;
       final date = e.get<Timestamp>()?.value ?? DateTime.now();
       final priority = e.get<Priority>()?.value;
       final archived = e.hasT<Archived>();
       final completed = e.hasT<Toggle>();
-
-      e.destroy();
 
       if (priority != null) {
         final reminderStore = !Hive.isBoxOpen('reminders')
@@ -539,29 +602,40 @@ class ReminderOperationsSystem extends TriggeredSystem {
 
   @override
   void executeOnChange() async {
-    final selected = entityManager.group(all: [Selected]);
+    // Match only selected reminders
+    final selected =
+        entityManager.groupMatching(Matchers.reminder.extend(all: [Selected]));
 
+    // Nothing to do
     if (selected.isEmpty) {
       return;
     }
 
-    for (var e in selected.entities) {
-      e..set(Toggle())..set(PersistMe(e.get<DatabaseKey>()?.value));
+    for (var reminder in selected.entities) {
+      // Apply changes and persist
+      reminder
+        ..set(Toggle())
+        ..set(PersistMe(reminder.get<DatabaseKey>()?.value))
+        ..remove<Selected>();
     }
   }
 }
 
+// Handles searching for tags
 class SearchSystem extends EntityManagerSystem implements ExecuteSystem {
   @override
   void execute() {
     final searchEntity = entityManager.getUniqueEntity<SearchBarTag>();
     final searchTerm = searchEntity.get<SearchTerm>()?.value;
+    // Only notes can have tags so don't match anything else
     final notes = entityManager.groupMatching(Matchers.note);
 
+    // Remove previous search results
     for (var note in notes.entities) {
       note.remove<SearchResult>();
     }
 
+    // Nothing to do
     if (searchTerm == null || searchTerm.isEmpty || searchTerm.length < 2) {
       return;
     }
@@ -570,33 +644,34 @@ class SearchSystem extends EntityManagerSystem implements ExecuteSystem {
         entityManager.getUniqueEntity<MainTickTag>().get<Tick>().value;
     final searchTick = searchEntity.get<Tick>()?.value ?? 0;
 
+    // Delays the searching to avoid incomplete terms
     if (searchTick + 20 > mainTick) {
       return;
     }
 
     for (var note in notes.entities) {
+      // Nothing to do
       if (!note.hasT<Tags>()) {
         continue;
       }
 
       final tags = note.get<Tags>().value;
 
-      if (tags.contains(searchTerm))
-        note.set(SearchResult());
-      else {
-        for (var tag in tags) {
-          for (final term in searchTerm.split(' '))
-            if (RegExp('\^$term', caseSensitive: false).hasMatch(tag)) {
-              note.set(SearchResult());
-            }
-        }
+      // Allows searching for multiple terms at a time
+      for (var tag in tags) {
+        for (final term in searchTerm.split(' '))
+          if (RegExp('\^$term', caseSensitive: false).hasMatch(tag)) {
+            note.set(SearchResult());
+          }
       }
     }
 
+    // Remove the tick so the search ends
     searchEntity.remove<Tick>();
   }
 }
 
+// Hide or show status bar if there's anything selected
 class StatusBarSystem extends TriggeredSystem {
   @override
   GroupChangeEvent get event => GroupChangeEvent.any;
@@ -606,6 +681,7 @@ class StatusBarSystem extends TriggeredSystem {
 
   @override
   void executeOnChange() {
+    // Apply to both notes and reminders
     final selected = entityManager.group(any: [Selected]).entities;
     final label = entityManager
         .getUniqueEntity<AppSettingsTag>()
@@ -613,16 +689,17 @@ class StatusBarSystem extends TriggeredSystem {
         .selectedLabel;
 
     if (selected.isNotEmpty) {
-      entityManager.getUniqueEntity<DisplayStatusTag>().set(Contents('$label'));
-      entityManager.getUniqueEntity<DisplayStatusTag>().set(Toggle());
+      entityManager.getUniqueEntity<StatusBarTag>().set(Contents('$label'));
+      entityManager.getUniqueEntity<StatusBarTag>().set(Toggle());
     } else {
-      entityManager.getUniqueEntity<DisplayStatusTag>()
+      entityManager.getUniqueEntity<StatusBarTag>()
         ..remove<Contents>()
         ..remove<Toggle>();
     }
   }
 }
 
+// Updates a counter every frame, mainly used to have realtime capabilities on the app
 class TickSystem extends EntityManagerSystem
     implements InitSystem, ExecuteSystem {
   @override
@@ -638,6 +715,7 @@ class TickSystem extends EntityManagerSystem
   }
 }
 
+// Changes locale, applies and persists user settings
 class UserSettingsSystem extends TriggeredSystem {
   @override
   GroupChangeEvent get event => GroupChangeEvent.added;
@@ -659,6 +737,7 @@ class UserSettingsSystem extends TriggeredSystem {
 
   @override
   void executeOnChange() {
+    // Branch depending on event type
     if (entityManager.getUnique<PersistUserSettingsEvent>() != null) {
       return persistUserSettings();
     } else if (entityManager.getUnique<LoadUserSettingsEvent>() != null) {
@@ -679,13 +758,16 @@ class UserSettingsSystem extends TriggeredSystem {
         .getUniqueEntity<AppSettingsTag>()
         .set(AppTheme(darkTheme ? DarkTheme() : LightTheme()));
 
+    // Make the OS status bar color match theme
     SystemChrome.setSystemUIOverlayStyle(SystemUiOverlayStyle(
       statusBarColor: darkTheme ? BaseTheme.darkestGrey : Colors.white,
     ));
 
+    // Mainly used on initialization to dismiss the splash screen
+    // TODO: Split this responsability somewhere else
     entityManager
       ..removeUnique<LoadUserSettingsEvent>()
-      ..setUnique(NavigationEvent.replace(Routes.showNotes));
+      ..setUnique(NavigationEvent.replace(Routes.mainScreen));
   }
 
   void persistUserSettings() async {
@@ -700,6 +782,7 @@ class UserSettingsSystem extends TriggeredSystem {
 
     await settingsStore.put('darkTheme', darkTheme);
 
+    // Make the OS status bar color match theme
     SystemChrome.setSystemUIOverlayStyle(SystemUiOverlayStyle(
       statusBarColor: darkTheme ? BaseTheme.darkestGrey : Colors.white,
     ));

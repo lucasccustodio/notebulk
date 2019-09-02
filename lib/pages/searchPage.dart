@@ -1,7 +1,5 @@
-import 'package:entitas_ff/entitas_ff.dart';
 import 'package:flutter/material.dart';
-import 'package:notebulk/ecs/components.dart';
-import 'package:notebulk/ecs/matchers.dart';
+import 'package:notebulk/ecs/ecs.dart';
 import 'package:notebulk/theme.dart';
 import 'package:notebulk/util.dart';
 import 'package:notebulk/widgets/cards.dart';
@@ -39,8 +37,10 @@ class SearchPage extends StatelessWidget {
                   .get<SearchTerm>()
                   ?.value;
 
+              // Nothing to show
               if (term == null || term.isEmpty) return SizedBox();
 
+              // No results so show hint as empty state
               if (notesList.isEmpty)
                 return Center(
                   child: RichText(
@@ -89,17 +89,22 @@ class SearchPage extends StatelessWidget {
           .get<SearchTerm>()
           ?.value,
       onChanged: (value) {
+        // Update search terms and tick but don't trigger a event yet
         entityManager.getUniqueEntity<SearchBarTag>()
           ..set(SearchTerm(value))
           ..set(entityManager.getUniqueEntity<MainTickTag>().get<Tick>());
       },
-      onFieldSubmitted: (_) => entityManager.setUnique(PerformSearchEvent()),
+      onFieldSubmitted: (_) {
+        // User submitted, trigger event now
+        return entityManager.setUnique(PerformSearchEvent());
+      },
     );
   }
 
   Widget buildNoteCard(Entity note) {
     return InkWell(
       onTap: () {
+        // Open form to edit a found note
         entityManager
           ..setUniqueOnEntity(FeatureEntityTag(), note)
           ..setUnique(NavigationEvent.push(Routes.editNote));

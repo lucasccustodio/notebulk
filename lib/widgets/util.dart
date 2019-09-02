@@ -40,6 +40,7 @@ Widget buildNotesSliverGridView(
   );
 }
 
+/*
 Widget buildNotesListView(
     List<ObservableEntity> notes, Widget Function(Entity) buildNoteCard) {
   return ListView.builder(
@@ -48,82 +49,10 @@ Widget buildNotesListView(
     itemBuilder: (context, index) => buildNoteCard(notes[index]),
   );
 }
+*/
 
-class FadeRoute extends PageRouteBuilder {
-  FadeRoute({this.page})
-      : super(
-          pageBuilder: (
-            context,
-            animation,
-            secondaryAnimation,
-          ) =>
-              page,
-          transitionsBuilder: (
-            context,
-            animation,
-            secondaryAnimation,
-            child,
-          ) =>
-              FadeTransition(
-            opacity: animation,
-            child: child,
-          ),
-        );
-
-  final Widget page;
-}
-
-class PushRoute extends PageRouteBuilder {
-  PushRoute({this.page})
-      : super(
-          pageBuilder: (
-            context,
-            animation,
-            secondaryAnimation,
-          ) =>
-              page,
-          transitionsBuilder: (
-            context,
-            animation,
-            secondaryAnimation,
-            child,
-          ) =>
-              SlideTransition(
-            position: Tween<Offset>(begin: Offset(0, 1), end: Offset(0, 0))
-                .animate(CurvedAnimation(
-                    parent: animation,
-                    curve: Curves.easeInOut,
-                    reverseCurve: Curves.fastOutSlowIn)),
-            child: child,
-          ),
-        );
-
-  final Widget page;
-}
-
-class GradientLineSeparator extends StatelessWidget {
-  const GradientLineSeparator({
-    Key key,
-  }) : super(key: key);
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.only(top: 8, bottom: 8),
-      child: Container(
-          width: double.maxFinite,
-          height: 1,
-          decoration: BoxDecoration(
-            gradient: RadialGradient(
-                colors: [Theme.of(context).primaryColor, Colors.black],
-                radius: 200.0),
-          )),
-    );
-  }
-}
-
-class BottomNavigation extends StatelessWidget {
-  const BottomNavigation({
+class TabBar extends StatelessWidget {
+  const TabBar({
     @required this.onTap,
     @required this.items,
     Key key,
@@ -204,11 +133,10 @@ class TabItem {
   final String label;
 }
 
-class StatusBarContainer extends StatelessWidget {
+class StatusBar extends StatelessWidget {
   final List<Widget> Function(int) actions;
-  final Widget fab;
 
-  const StatusBarContainer({Key key, this.actions, this.fab}) : super(key: key);
+  const StatusBar({Key key, this.actions}) : super(key: key);
 
   @override
   Widget build(BuildContext context) {
@@ -219,7 +147,7 @@ class StatusBarContainer extends StatelessWidget {
         entityManager.getUniqueEntity<AppSettingsTag>().get<Localization>();
 
     return AnimatableEntityObservingWidget(
-      provider: (em) => em.getUniqueEntity<DisplayStatusTag>(),
+      provider: (em) => em.getUniqueEntity<StatusBarTag>(),
       startAnimating: false,
       curve: Curves.fastOutSlowIn,
       duration: Duration(milliseconds: 200),
@@ -234,11 +162,8 @@ class StatusBarContainer extends StatelessWidget {
       builder: (statusEntity, animations, context) {
         return Stack(
           children: <Widget>[
-            if (fab != null)
-              Positioned(
-                  bottom: 8 + animations['size'].value, right: 8, child: fab),
             SizedBox(
-              height: kBottomNavigationBarHeight + (fab != null ? 64 : 0),
+              height: kBottomNavigationBarHeight * animations['size'].value,
               width: MediaQuery.of(context).size.width,
             ),
             Positioned(
@@ -332,7 +257,6 @@ class ShouldLeavePromptDialog extends StatelessWidget {
   }
 }
 
-//Nice gradient background that helps stylize the app.
 class GradientBackground extends StatelessWidget {
   const GradientBackground({Key key, this.child, this.appTheme})
       : super(key: key);
@@ -348,7 +272,7 @@ class GradientBackground extends StatelessWidget {
   }
 }
 
-class ClippableShadowPainter extends CustomPainter {
+/* class ClippableShadowPainter extends CustomPainter {
   ClippableShadowPainter({@required this.shadow, @required this.clipper});
 
   final Shadow shadow;
@@ -365,4 +289,4 @@ class ClippableShadowPainter extends CustomPainter {
   bool shouldRepaint(CustomPainter oldDelegate) {
     return true;
   }
-}
+} */

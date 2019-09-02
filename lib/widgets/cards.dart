@@ -173,17 +173,17 @@ class NoteCardWidget extends StatelessWidget {
   }
 }
 
-class EventCardWidget extends StatelessWidget {
-  const EventCardWidget({Key key, this.noteEntity}) : super(key: key);
+class ReminderCardWidget extends StatelessWidget {
+  const ReminderCardWidget({Key key, this.reminderEntity}) : super(key: key);
 
-  final Entity noteEntity;
+  final Entity reminderEntity;
 
   @override
   Widget build(BuildContext context) {
-    final reminderPriority = noteEntity.get<Priority>().value.index;
-    final contents = noteEntity.get<Contents>().value;
-    final timestamp = noteEntity.get<Timestamp>()?.value ?? DateTime.now();
-    final isSelected = noteEntity.hasT<Selected>();
+    final reminderPriority = reminderEntity.get<Priority>().value.index;
+    final contents = reminderEntity.get<Contents>().value;
+    final timestamp = reminderEntity.get<Timestamp>()?.value ?? DateTime.now();
+    final isSelected = reminderEntity.hasT<Selected>();
     final localization = EntityManagerProvider.of(context)
         .entityManager
         .getUniqueEntity<AppSettingsTag>()
@@ -227,7 +227,7 @@ class EventCardWidget extends StatelessWidget {
 
   Widget buildContentsField(
       BuildContext context, String contents, BaseTheme appTheme) {
-    final priority = noteEntity.get<Priority>()?.value;
+    final priority = reminderEntity.get<Priority>()?.value;
     final cardColor = priority != null
         ? appTheme.reminderPriorityColors[priority.index]
         : appTheme.appBarColor;
@@ -246,7 +246,7 @@ class EventCardWidget extends StatelessWidget {
   Widget buildTimestamp(BuildContext context, DateTime date,
       Localization localization, BaseTheme appTheme) {
     final timestamp = formatTimestamp(date, localization);
-    final priority = noteEntity.get<Priority>()?.value;
+    final priority = reminderEntity.get<Priority>()?.value;
     final cardColor = priority != null
         ? appTheme.reminderPriorityColors[priority.index]
         : appTheme.appBarColor;

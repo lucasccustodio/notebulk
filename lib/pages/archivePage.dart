@@ -1,8 +1,5 @@
-import 'package:entitas_ff/entitas_ff.dart';
 import 'package:flutter/material.dart';
-import 'package:notebulk/ecs/components.dart';
-import 'package:notebulk/ecs/matchers.dart';
-import 'package:notebulk/ecs/util.dart';
+import 'package:notebulk/ecs/ecs.dart';
 import 'package:notebulk/util.dart';
 import 'package:notebulk/widgets/cards.dart';
 import 'package:notebulk/widgets/util.dart';
@@ -61,39 +58,31 @@ class ArchivePage extends StatelessWidget {
                   key: PageStorageKey('archivedScroll'),
                   children: <Widget>[
                     for (final noteGroup in notesByDate.entries) ...[
-                      noteGroup.value.isNotEmpty
-                          ? CheckboxListTile(
-                              dense: true,
-                              activeColor: appTheme.primaryButtonColor,
-                              checkColor: appTheme.buttonIconColor,
-                              controlAffinity: ListTileControlAffinity.leading,
-                              title: Text(
-                                formatTimestamp(noteGroup.key, localization,
-                                    includeDay: false, includeWeekDay: false),
-                                style: appTheme.titleTextStyle,
-                              ),
-                              value: noteGroup.value
-                                      .where((e) => e.hasT<Selected>())
-                                      .length ==
-                                  noteGroup.value.length,
-                              onChanged: (value) {
-                                if (value) {
-                                  for (final note in noteGroup.value)
-                                    note.set(Selected());
-                                } else {
-                                  for (final note in noteGroup.value)
-                                    note.remove<Selected>();
-                                }
-                              },
-                            )
-                          : ListTile(
-                              dense: true,
-                              title: Text(
-                                formatTimestamp(noteGroup.key, localization,
-                                    includeDay: false, includeWeekDay: false),
-                                style: appTheme.titleTextStyle,
-                              ),
-                            ),
+                      if (noteGroup.value.isNotEmpty)
+                        CheckboxListTile(
+                          dense: true,
+                          activeColor: appTheme.primaryButtonColor,
+                          checkColor: appTheme.buttonIconColor,
+                          controlAffinity: ListTileControlAffinity.leading,
+                          title: Text(
+                            formatTimestamp(noteGroup.key, localization,
+                                includeDay: false, includeWeekDay: false),
+                            style: appTheme.titleTextStyle,
+                          ),
+                          value: noteGroup.value
+                                  .where((e) => e.hasT<Selected>())
+                                  .length ==
+                              noteGroup.value.length,
+                          onChanged: (value) {
+                            if (value) {
+                              for (final note in noteGroup.value)
+                                note.set(Selected());
+                            } else {
+                              for (final note in noteGroup.value)
+                                note.remove<Selected>();
+                            }
+                          },
+                        ),
                       buildNotesGridView(
                         noteGroup.value,
                         buildNoteCard,
@@ -110,7 +99,8 @@ class ArchivePage extends StatelessWidget {
     return InkWell(
       onLongPress: () => toggleSelected(note),
       onTap: () {
-        if (entityManager.getUniqueEntity<DisplayStatusTag>().hasT<Toggle>())
+        // Handle only selection since archived notes can't be edited
+        if (entityManager.getUniqueEntity<StatusBarTag>().hasT<Toggle>())
           toggleSelected(note);
       },
       child: NoteCardWidget(

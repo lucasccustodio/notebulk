@@ -1,16 +1,16 @@
 import 'dart:io';
 
-import 'package:entitas_ff/entitas_ff.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:kt_dart/kt.dart';
-import 'package:notebulk/ecs/components.dart';
+import 'package:notebulk/ecs/ecs.dart';
 import 'package:notebulk/theme.dart';
 import 'package:notebulk/util.dart';
 import 'package:notebulk/widgets/util.dart';
 import 'package:path_provider/path_provider.dart';
 
+// Note form, will get intially populated if the note already exists or start blank if creating a new one
 class NoteFormFeature extends StatefulWidget {
   const NoteFormFeature({Key key, this.title}) : super(key: key);
 
@@ -53,7 +53,7 @@ class _NoteFormFeatureState extends State<NoteFormFeature> {
             .hasT<Changed>()) {
           return true;
         } else {
-          return showDialog(
+          return await showDialog(
               context: context,
               builder: (context) => ShouldLeavePromptDialog(
                   appTheme: appTheme,
@@ -71,6 +71,7 @@ class _NoteFormFeatureState extends State<NoteFormFeature> {
       },
       child: Scaffold(
         resizeToAvoidBottomInset: true,
+        backgroundColor: appTheme.appBarColor,
         body: Form(
           key: key,
           child: SafeArea(
@@ -102,7 +103,8 @@ class _NoteFormFeatureState extends State<NoteFormFeature> {
                         builder: (noteEntity, context) => FlatButton(
                           child: Text(
                             localization.saveChangesFeatureLabel,
-                            style: Theme.of(context).textTheme.title.copyWith(
+                            style: appTheme.appTitleTextStyle.copyWith(
+                                fontSize: 24,
                                 color: noteEntity.hasT<Changed>()
                                     ? appTheme.primaryButtonColor
                                     : BaseTheme.lightGrey),
@@ -144,7 +146,7 @@ class _NoteFormFeatureState extends State<NoteFormFeature> {
                           provider: (em) =>
                               em.getUniqueEntity<FeatureEntityTag>(),
                           builder: (noteEntity, context) =>
-                              buildNoteCard(noteEntity, localization, appTheme),
+                              buildFormBody(noteEntity, localization, appTheme),
                         ),
                       )),
                 ],
@@ -158,6 +160,7 @@ class _NoteFormFeatureState extends State<NoteFormFeature> {
 
   Widget buildTagsField(
       Entity noteEntity, Localization localization, BaseTheme appTheme) {
+    // Tags are separated by comma
     return TextFormField(
       initialValue: noteEntity.get<Tags>()?.value?.join(', ') ?? '',
       textInputAction: TextInputAction.newline,
@@ -177,6 +180,7 @@ class _NoteFormFeatureState extends State<NoteFormFeature> {
               .copyWith(color: appTheme.baseStyle.color.withOpacity(0.5)),
           hintMaxLines: 2),
       onSaved: (contents) {
+        // Sanitize, process and update note's tags
         noteEntity.set(Tags(contents
             .trim()
             .split(',')
@@ -191,57 +195,51 @@ class _NoteFormFeatureState extends State<NoteFormFeature> {
     );
   }
 
-  Card buildNoteCard(
+  Widget buildFormBody(
       Entity noteEntity, Localization localization, BaseTheme appTheme) {
     final timestamp = DateTime.now();
     final style = appTheme.formLabelStyle;
 
-    return Card(
-      clipBehavior: Clip.antiAlias,
-      elevation: 4,
-      color: appTheme.appBarColor,
-      margin: const EdgeInsets.all(0),
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.start,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: <Widget>[
-            buildTimestamp(timestamp, localization, appTheme),
-            Padding(
-              padding: const EdgeInsets.only(top: 16),
-              child: Text(
-                localization.featureImageLabel,
-                style: style,
-              ),
+    return Padding(
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.start,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          buildTimestamp(timestamp, localization, appTheme),
+          Padding(
+            padding: const EdgeInsets.only(top: 16),
+            child: Text(
+              localization.featureImageLabel,
+              style: style,
             ),
-            buildPicField(noteEntity, localization, appTheme),
-            Padding(
-              padding: const EdgeInsets.only(top: 16),
-              child: Text(
-                localization.featureContentsLabel,
-                style: style,
-              ),
+          ),
+          buildPicField(noteEntity, localization, appTheme),
+          Padding(
+            padding: const EdgeInsets.only(top: 16),
+            child: Text(
+              localization.featureContentsLabel,
+              style: style,
             ),
-            buildContentsField(noteEntity, localization, appTheme),
-            Padding(
-              padding: const EdgeInsets.only(top: 16),
-              child: Text(
-                localization.featureTodoLabel,
-                style: style,
-              ),
+          ),
+          buildContentsField(noteEntity, localization, appTheme),
+          Padding(
+            padding: const EdgeInsets.only(top: 16),
+            child: Text(
+              localization.featureTodoLabel,
+              style: style,
             ),
-            buildListField(noteEntity, localization, appTheme),
-            Padding(
-              padding: const EdgeInsets.only(top: 16),
-              child: Text(
-                localization.featureTagsLabel,
-                style: style,
-              ),
+          ),
+          buildListField(noteEntity, localization, appTheme),
+          Padding(
+            padding: const EdgeInsets.only(top: 16),
+            child: Text(
+              localization.featureTagsLabel,
+              style: style,
             ),
-            buildTagsField(noteEntity, localization, appTheme),
-          ],
-        ),
+          ),
+          buildTagsField(noteEntity, localization, appTheme),
+        ],
       ),
     );
   }
@@ -256,36 +254,42 @@ class _NoteFormFeatureState extends State<NoteFormFeature> {
 
   Widget buildContentsField(
       Entity noteEntity, Localization localization, BaseTheme appTheme) {
-    return TextFormField(
-      focusNode: contentsNode,
-      autofocus: true,
-      initialValue: noteEntity.get<Contents>()?.value ?? '',
-      textInputAction: TextInputAction.newline,
-      keyboardType: TextInputType.text,
-      maxLines: null,
-      minLines: 5,
-      decoration: InputDecoration(
-          filled: true,
-          fillColor: appTheme.baseStyle.color.withOpacity(0.1),
-          contentPadding: const EdgeInsets.all(12),
-          border: OutlineInputBorder(
-              borderSide: BorderSide.none,
-              borderRadius: BorderRadius.circular(6),
-              gapPadding: 0),
-          hintText: localization.featureContentsHint,
-          hintStyle: appTheme.biggerBodyTextStyle
-              .copyWith(color: appTheme.baseStyle.color.withOpacity(0.5)),
-          hintMaxLines: 2),
-      onSaved: (contents) {
-        noteEntity.set(Contents(contents));
-      },
-      onChanged: (_) {
-        noteEntity.set(Changed());
-      },
-      validator: (contents) =>
-          contents.isEmpty ? localization.featureContentsError : null,
-      textAlign: TextAlign.left,
-      style: appTheme.biggerBodyTextStyle,
+    return Theme(
+      data: ThemeData(
+          fontFamily: 'Palanquin'), // Fixes desktop not showing error text
+      child: TextFormField(
+        focusNode: contentsNode,
+        autofocus: true,
+        initialValue: noteEntity.get<Contents>()?.value ?? '',
+        textInputAction: TextInputAction.newline,
+        keyboardType: TextInputType.text,
+        maxLines: null,
+        minLines: 5,
+        decoration: InputDecoration(
+            filled: true,
+            fillColor: appTheme.baseStyle.color.withOpacity(0.1),
+            contentPadding: const EdgeInsets.all(12),
+            border: OutlineInputBorder(
+                borderSide: BorderSide.none,
+                borderRadius: BorderRadius.circular(6),
+                gapPadding: 0),
+            hintText: localization.featureContentsHint,
+            hintStyle: appTheme.biggerBodyTextStyle
+                .copyWith(color: appTheme.baseStyle.color.withOpacity(0.5)),
+            hintMaxLines: 2),
+        onSaved: (contents) {
+          // Form validated so save modifications
+          noteEntity.set(Contents(contents));
+        },
+        onChanged: (_) {
+          // Inform that the field changed and enable save button
+          noteEntity.set(Changed());
+        },
+        validator: (contents) =>
+            contents.isEmpty ? localization.featureContentsError : null,
+        textAlign: TextAlign.left,
+        style: appTheme.biggerBodyTextStyle,
+      ),
     );
   }
 
@@ -293,6 +297,7 @@ class _NoteFormFeatureState extends State<NoteFormFeature> {
       Entity noteEntity, Localization localization, BaseTheme appTheme) {
     final todo = KtList<ListItem>.from(noteEntity.get<Todo>()?.value ?? []);
 
+    // List items are separated by newline and completed if ended with *
     return TextFormField(
       initialValue: todo
               .map<String>(
@@ -318,6 +323,7 @@ class _NoteFormFeatureState extends State<NoteFormFeature> {
               .copyWith(color: appTheme.baseStyle.color.withOpacity(0.5)),
           hintMaxLines: 5),
       onSaved: (contents) {
+        // Sanitize, process and update note's todo list
         noteEntity.set(Todo(
             value: KtList.from(contents.split('\n'))
                 .map((item) => ListItem(item.replaceAll('*', ''),
@@ -326,6 +332,7 @@ class _NoteFormFeatureState extends State<NoteFormFeature> {
                 .asList()));
       },
       onChanged: (_) {
+        // Inform that the field changed and enable save button
         noteEntity.set(Changed());
       },
       textAlign: TextAlign.left,
@@ -442,7 +449,9 @@ class _NoteFormFeatureState extends State<NoteFormFeature> {
   }
 
   void selectImageDesktop(Function(String) callback) {
-    /* showOpenPanel((result, paths) {
+    /* 
+    Uncomment if Desktop
+    showOpenPanel((result, paths) {
       if (result == FileChooserResult.ok && paths.isNotEmpty) {
         final originPath = paths.first;
         final image = File(originPath);

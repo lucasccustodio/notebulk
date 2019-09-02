@@ -10,7 +10,10 @@ void toggleSelected(Entity target) {
     target.set(Selected());
 }
 
-/* enum ListItemAnimation {
+/* 
+Experimental untested stuff
+
+enum ListItemAnimation {
   fadeIn,
   fadeOut,
   enterLeft,
@@ -320,4 +323,4 @@ class _AnimatedListItem extends StatelessWidget {
     return itemWidget;
   }
 }
- */
+*/

@@ -193,6 +193,8 @@ class DarkTheme extends BaseTheme {
       super.subtitleTextStyle.copyWith(color: BaseTheme.darkGrey);
 }
 
+// Placeholder theme to properly display SplashScreen
+// TODO: Get rid of this hack
 class BlankTheme extends DarkTheme {
   @override
   LinearGradient get backgroundGradient =>

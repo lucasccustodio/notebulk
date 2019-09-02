@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:notebulk/theme.dart';
 import 'package:notebulk/widgets/util.dart';
 
+// Shown while the app is loading it's data
 class SplashScreenPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {

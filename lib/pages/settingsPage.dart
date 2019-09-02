@@ -1,6 +1,5 @@
-import 'package:entitas_ff/entitas_ff.dart';
 import 'package:flutter/material.dart';
-import 'package:notebulk/ecs/components.dart';
+import 'package:notebulk/ecs/ecs.dart';
 import 'package:notebulk/theme.dart';
 import 'package:notebulk/util.dart';
 
@@ -29,6 +28,7 @@ class SettingsPage extends StatelessWidget {
               ),
               value: appTheme.brightness == Brightness.dark,
               onChanged: (enabled) {
+                // Toggle dark mode and persist the changes
                 entityManager
                     .getUniqueEntity<AppSettingsTag>()
                     .set(AppTheme(enabled ? DarkTheme() : LightTheme()));
@@ -48,19 +48,29 @@ class SettingsPage extends StatelessWidget {
               color: appTheme.buttonIconColor,
             ),
             color: appTheme.primaryButtonColor,
-            textColor: appTheme.buttonLabelColor,
-            label: Text(localization.settingsExportLabel),
+            textColor: appTheme.buttonIconColor,
+            label: Text(
+              localization.settingsExportLabel,
+              style: appTheme.actionableLabelStyle
+                  .copyWith(color: appTheme.buttonLabelColor),
+            ),
             onPressed: () {
-              entityManager.setUnique(ExportNotesEvent());
+              // Trigger the event to export database backup
+              entityManager.setUnique(ExportBackupEvent());
             },
           ),
           FlatButton.icon(
             icon: Icon(AppIcons.upload, color: appTheme.buttonIconColor),
             color: appTheme.primaryButtonColor,
             textColor: appTheme.buttonLabelColor,
-            label: Text(localization.settingsImportLabel),
+            label: Text(
+              localization.settingsImportLabel,
+              style: appTheme.actionableLabelStyle
+                  .copyWith(color: appTheme.buttonLabelColor),
+            ),
             onPressed: () {
-              entityManager.setUnique(ImportNotesEvent());
+              // Trigger the event to import database backup
+              entityManager.setUnique(ImportBackupEvent());
             },
           ),
           SizedBox(
