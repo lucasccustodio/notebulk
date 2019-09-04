@@ -645,7 +645,7 @@ class SearchSystem extends EntityManagerSystem implements ExecuteSystem {
     final searchTick = searchEntity.get<Tick>()?.value ?? 0;
 
     // Delays the searching to avoid incomplete terms
-    if (searchTick + 20 > mainTick) {
+    if (searchTick + 5 < mainTick) {
       return;
     }
 
