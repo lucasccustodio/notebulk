@@ -146,7 +146,7 @@ class StatusBar extends StatelessWidget {
     final localization =
         entityManager.getUniqueEntity<AppSettingsTag>().get<Localization>();
 
-    return AnimatableEntityObservingWidget(
+    return AnimatableEntityObservingWidget.extended(
       provider: (em) => em.getUniqueEntity<StatusBarTag>(),
       startAnimating: false,
       curve: Curves.fastOutSlowIn,
