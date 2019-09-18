@@ -175,12 +175,21 @@ class BackupSystem extends TriggeredSystem {
             jsonDecode(backupFile.readAsStringSync() ?? '{}');
         final snapshotData = Map<String, dynamic>.from(map);
         final tagMap = entityManager.groupMatching(Matchers.tag);
-        final darkTheme = snapshotData['settings']['darkTheme'] ?? false;
+        final darkTheme = snapshotData['settings']['darkTheme'] ??
+            entityManager
+                    .getUniqueEntity<AppSettingsTag>()
+                    .get<AppTheme>()
+                    .value
+                    .brightness ==
+                Brightness.dark;
 
         // Set the theme accordingly
         entityManager
             .getUniqueEntity<AppSettingsTag>()
             .set(AppTheme(darkTheme ? DarkTheme() : LightTheme()));
+
+        if (snapshotData['notes'] == null || snapshotData['notes'].isEmpty)
+          return;
 
         // Loop through notes array and create note entities
         // TODO: Should duplicates be handled somehow?
@@ -283,7 +292,8 @@ class DatabaseSystem extends TriggeredSystem implements InitSystem, ExitSystem {
   void init() {
     // These allow the system to avoid creating duplicates
     tagMap = entityManager.groupMatching(Matchers.tag);
-    noteMap = entityManager.groupMatching(Matchers.note);
+    noteMap =
+        entityManager.groupMatching(Matchers.note.copyWith(none: [Priority]));
     reminderMap = entityManager.groupMatching(Matchers.reminder);
 
     // Initialize the database when the system is created
@@ -450,6 +460,8 @@ class InBetweenNavigationSystem extends TriggeredSystem {
     for (var note in selectedNotes.entities) {
       note.remove<Selected>();
     }
+
+    entityManager.getUniqueEntity<StatusBarTag>().remove<Toggle>();
   }
 }
 
@@ -498,7 +510,7 @@ class NoteOperationsSystem extends TriggeredSystem {
   void executeOnChange() async {
     // Match only selected notes
     final selectedNotes = entityManager.groupMatching(
-        Matchers.note.extend(all: [Selected]).copyWith(none: [Priority]));
+        EntityMatcher(all: [DatabaseKey, Selected], none: [Priority]));
 
     // Nothing to do
     if (selectedNotes.isEmpty) {

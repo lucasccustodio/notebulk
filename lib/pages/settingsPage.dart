@@ -59,6 +59,7 @@ class SettingsPage extends StatelessWidget {
               entityManager.setUnique(ExportBackupEvent());
             },
           ),
+          Text('WIP: Doesn\'t handle duplicates'),
           FlatButton.icon(
             icon: Icon(AppIcons.upload, color: appTheme.buttonIconColor),
             color: appTheme.primaryButtonColor,
@@ -75,7 +76,7 @@ class SettingsPage extends StatelessWidget {
           ),
           SizedBox(
             height: 16,
-          )
+          ),
         ],
       ),
     );
